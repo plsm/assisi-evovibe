@@ -114,6 +114,102 @@ class CircularArenaImage (AbstractArenaImage):
 
 
 
+class StadiumBorderArenaImage (AbstractArenaImage):
+    """
+    Contains details about the background image and the iteration images.  This has to be done every time we switch bees.
+    
+    The stadium arena has two CASUs.
+    """
+    def __init__ (self):
+        AbstractArenaImage.__init__ (self)
+
+    def ask_image_properties (self):
+        print "\n\n* ** Arena Image Information ** *"
+        print "Check the background image and enter the following information"
+        ok = False
+        while not ok:
+            try:
+                self.arena_left = int (raw_input ("leftmost (min) pixel of the arena? "))
+                self.arena_right = int (raw_input ("rightmost (max) pixel of the arena? "))
+                self.arena_top = int (raw_input ("topmost (min) pixel of the arena? "))
+                self.arena_bottom = int (raw_input ("bottommost (max) pixel of the arena? "))
+                self.arena_horizontal_border_flag = raw_input ("Enter H for horizontal border or V for vertical border: ").upper ()
+                if self.arena_horizontal_border_flag == 'H':
+                    self.arena_active_casu_side = raw_input ("Enter T for active casu in top of arena or B for active casu in bottom of arena: ").upper ()
+                elif self.arena_horizontal_border_flag == 'V':
+                    self.arena_active_casu_side = raw_input ("Enter L for active casu in left of arena or R for active casu in right of arena: ").upper ()
+                else:
+                    raise ValueError ()
+                self.arena_border_coordinate = int (raw_input ("Coordinate of border? "))
+                ok = True
+            except ValueError:
+                print "Enter image values again"
+                ok = False
+
+    def bee_percentage_around_casus (self, jpgfile_data1, jpgfile_data2):
+        """
+        Compute how many bees are around the active and passive CASUs.
+
+        One of the parameters should be the background image, and the other should be an iteration step image.
+
+        Only pixels that are different are taken into account.
+
+        Returns a 2-tuple with bee percentage around active CASU and with bee percentage around passive CASU.
+        """
+        active_area = 0
+        passive_area = 0
+        for x in xrange (self.arena_left, self.arena_right + 1, 1):
+            for y in xrange (self.arena_top, self.arena_bottom + 1, 1):
+                if self.arena_horizontal_border_flag == 'H':
+                    if self.arena_active_casu_side == 'T':
+                        if y < self.arena_border_coordinate:
+                            active_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+                        else:
+                            passive_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+                    else:
+                        if x < self.arena_border_coordinate:
+                            active_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+                        else:
+                            passive_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+        bee_area = passive_area + active_area
+        if bee_area == 0:
+            return (-1, -1)
+        else:
+            return ((100.0 * active_area) / bee_area, (100.0 * passive_area) / bee_area)
+
+    def moving_bees_around_casus (self, jpgfile_data1, jpgfile_data2):
+        """
+        Compute how many bees are moving aroung the active and passive CASUs.
+
+        Both parameters should be iteration step images.
+
+        Only pixels that are different are taken into account.
+        """
+        active_area = 0
+        passive_area = 0
+        for x in xrange (self.arena_left, self.arena_right + 1, 1):
+            for y in xrange (self.arena_top, self.arena_bottom + 1, 1):
+                if self.arena_horizontal_border_flag == 'H':
+                    if self.arena_active_casu_side == 'T':
+                        if y < self.arena_border_coordinate:
+                            active_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+                        else:
+                            passive_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+                    else:
+                        if x < self.arena_border_coordinate:
+                            active_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+                        else:
+                            passive_area += self.different_pixel (x, y, jpgfile_data1, jpgfile_data2)
+        return (active_area, passive_area)
+
+    def create_measure_area_image (self, imgpath):
+        bash_command = [
+            'convert',
+            imgpath + 'Background.jpg',
+            '-crop', str (self.arena_right - self.arena_left) + 'x' + str (self.arena_bottom - self.arena_top) + '+' + str (self.width) + '+' + str (self.height)
+            convert Measured-Area.jpg -crop 200x200+10+10 out.jpg
+            convert out.jpg -fill 'rgb(255,255,0)' -tint 100  out2.jpg
+            convert Measured-Area.jpg -draw 'image SrcOver 10,10 200,200 out2.jpg' out3.jpg
 
 class StadiumArenaImage (AbstractArenaImage):
     """

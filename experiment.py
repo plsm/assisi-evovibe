@@ -41,6 +41,6 @@ def connect_casu (config):
         a_casu.diagnostic_led_standby () # turn the top led off
         a_casu.set_speaker_vibration (freq = 0, intens = 0)
         a_casu.ir_standby ()             # turn the IR sensor off to make the background image
-        #        a_casu.set_temp (28)
+        a_casu.set_temp (config.casu_temperature)
         a_casu.airflow_standby ()
     return (active_casu, passive_casu)
