@@ -1,10 +1,28 @@
-import image
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+#import image
+
+from __future__ import print_function
 
 import yaml
 
 class Config:
     """
     Configuration setup of an incremental evolutionary algorithm setup.
+
+    Parameters in the configuration file:
+
+    number_bees:  number of bees in each arena.
+
+    number_generations:  number of generations of the evolutionary algorithm
+
+    number_evaluations_per_episode: maximum number of times a bee group is used to evaluate a chromosome
+
+    evaluation_run_time: duration (in sec) of a single evaluation of a chromosome
+    
+    spreading_waiting_time: time (in sec) for the bees to spread after vibration
+
     """
 
     BEE_WORKDAY_LENGTH = 30 * 60
@@ -12,121 +30,88 @@ class Config:
     Length of bees workday length in seconds.  After this time has elapsed, bees have to go home to rest and get fed.
     """
 
-    def __init__ (self, filename):
-        file_object = open (filename, 'r')
+    def __init__ (self):
+        file_object = open ('config', 'r')
         dictionary = yaml.load (file_object)
         file_object.close ()
         #DEBUG print dictionary
         try:
-            self.number_of_bees                            = dictionary ['number_of_bees']
-            """Number of bess in a chromosome evaluation"""
-            self.generations_with_chromosome_frequency     = dictionary ['generations'] ['chromosome_frequency']
-            self.generations_with_chromosome_freq_inten    = dictionary ['generations'] ['chromosome_freq_inten']
-            self.generations_with_chromosome_nature_draft  = dictionary ['generations'] ['chromosome_nature_draft']
-            self.generations_with_chromosome_frequency_with_vibration_pause = dictionary ['generations']['chromosome_frequency_with_vibration_pause']
-            self.generations_GP_F450 = dictionary ['generations']['pause_freq_450']
-            self.generations_GP_F440 = dictionary ['generations']['pause_freq_440']
-            self.number_of_evaluations_per_episode         = dictionary ['number_of_evaluations_per_episode']
-            """The number of iterations in one episode of experiment  (then change the bees)"""
-            self.evaluation_runtime                        = dictionary ['evaluation_runtime']
-            """The runtime of a single iteration / chromosome evaluation (in sec) (vibration)"""
-            self.spreading_waitingtime                     = dictionary ['spreading_waitingtime']
-            """Time (in sec) for the bees to spread after vibration (no vibration)"""
-            self.population_size                           = dictionary ['population_size']
-            self.number_evaluations_per_chromosome         = dictionary ['number_evaluations_per_chromosome']
-            """How many experimental runs are made per chromosome evaluation"""
-            self.casus_rtc_file_names = [
-                dictionary ['casu_0_rtc_file_name'],
-                dictionary ['casu_1_rtc_file_name']]
-            self.stopped_threshold                         = dictionary ['stopped_threshold']
-            self.aggregation_minDuration_thresh            = dictionary ['aggregation_minDuration_thresh']
-            self.fitness_function                          = dictionary ['fitness_function']
-            self.arena_type                                = dictionary ['arena']
-            self.constant_airflow                          = dictionary ['constant_airflow']
+            self.number_bees                        = dictionary ['number_bees']
+            self.number_generations                 = dictionary ['number_generations']
+            self.number_evaluations_per_episode     = dictionary ['number_evaluations_per_episode']
+            self.evaluation_run_time                = dictionary ['evaluation_run_time']
+            self.spreading_waiting_time             = dictionary ['spreading_waiting_time']
+            self.population_size                    = dictionary ['population_size']
+            self.number_evaluations_per_chromosome  = dictionary ['number_evaluations_per_chromosome']
+            self.stopped_threshold                  = dictionary ['stopped_threshold']
+            self.aggregation_minDuration_thresh     = dictionary ['aggregation_minDuration_thresh']
+            self.fitness_function                   = dictionary ['fitness_function']
+            self.arena_type                         = dictionary ['arena_type']
+            self.constant_airflow                   = dictionary ['constant_airflow']
+            self.frame_per_second                   = dictionary ['frame_per_second']
+            self.image_width                        = dictionary ['image']['width']
+            self.image_height                       = dictionary ['image']['height']
         except KeyError as e:
-            print 'The configuration file does not have parameter ' + str (e)
-            print
+            print ("The configuration file does not have parameter '%s'\n" % (str (e)))
             raise
-        self.num_generations = self.generations_with_chromosome_frequency + \
-            self.generations_with_chromosome_freq_inten + \
-            self.generations_with_chromosome_nature_draft
         self.aggregation_threhsoldN = 55 # Threshold for the number of bees aggregated around the vibrating CASU
 
-        if self.arena_type == 'stadium':
-            self.arena_image = image.StadiumArenaImage ()
-        elif self.arena_type == 'circular':
-            self.arena_image = image.CircularArenaImage ()
-        elif self.arena_type == 'StadiumBorderArenaImage':
-            self.arena_image = image.StadiumBorderArenaImage ()
-
-        self.image_width = 600
-        self.image_height = 600
-        self.frame_per_second = 1        # 1 frame per sec    #  1/10.0 #1 frame per 10 sec
-        experimentstamp  = str (input ('\nPlease enter the run number: '))
-        self.experimentpath = "./experiment_logs/learningexperiment_" + experimentstamp + "/" #the name of the folder that we will save data in
-        self.repositorypath = "./experiment_repository/learningexperiment_" + experimentstamp + "/"
 
     def status (self):
         """
         Do a diagnosis of this experimental configuration.
         """
-        print "\n\n\n* ** Configuration Status ** *"
-        bwl = self.number_of_evaluations_per_episode * (self.evaluation_runtime + self.spreading_waitingtime)
-        print "Bees are going to work %d:%d" % (bwl / 60, bwl % 60),
+        print ("\n\n\n* ** Configuration Status ** *")
+        bwl = self.number_evaluations_per_episode * (self.evaluation_run_time + self.spreading_waiting_time)
+        print ("Bees are going to work %d:%d" % (bwl / 60, bwl % 60), end='')
         if bwl > Config.BEE_WORKDAY_LENGTH:
-            print ", which is %d%% more than their workday length" % (int ((bwl - Config.BEE_WORKDAY_LENGTH) * 100.0 / Config.BEE_WORKDAY_LENGTH))
+            print (", which is %d%% more than their workday length." % (int ((bwl - Config.BEE_WORKDAY_LENGTH) * 100.0 / Config.BEE_WORKDAY_LENGTH)))
         else:
-            print ", which is below their workday length"
-        if self.number_of_evaluations_per_episode % self.number_evaluations_per_chromosome == 0:
-            print "When a chromosome is being evaluated, no bee change will occur.  Maybe you are assuming that there are changes from one bee set to another"
+            print (", which is below their workday length.")
+        if self.number_evaluations_per_episode % self.number_evaluations_per_chromosome == 0:
+            print ("When a chromosome is being evaluated, no bee change will occur.  Maybe you are assuming that there are changes from one bee set to another.")
         else:
-            print "When a chromosome is being evaluated, bee changes WILL occur.  You are assuming that all bee sets are equal."
-        print "Configuration file read:"
-        print self
+            print ("When a chromosome is being evaluated, bee changes WILL occur.  You are assuming that all bee sets are equal.")
+        print ("Configuration file read:")
+        print ("----------------------------------------------------------------")
+        print (self, end='')
+        print ("----------------------------------------------------------------")
         raw_input ('Press ENTER to continue')
 
     def __str__ (self):
-        return """number_of_bees : %d
-generations:
-     chromosome_frequency: %d
-     chromosome_freq_inten: %d
-     chromosome_nature_draft: %d
-     chromosome_frequency_with_vibration_pause: %d
-     pause_freq_450: %d
-     pause_freq_440: %d
-number_of_evaluations_per_episode: %d
-evaluation_runtime: %d
-spreading_waitingtime: %d
+        return """number_bees : %d
+number_generations: %d
+number_evaluations_per_episode: %d
+evaluation_run_time: %d
+spreading_waiting_time: %d
 population_size: %d
 number_evaluations_per_chromosome: %d
-casu_0 : %s
-casu_1 : %s
 stopped_threshold : %d
 aggregation_minDuration_thresh : %d
 fitness_function : %s
 constant_airflow : %s
-arena : %s
-""" % (self.number_of_bees,
-       self.generations_with_chromosome_frequency,
-       self.generations_with_chromosome_freq_inten,
-       self.generations_with_chromosome_nature_draft,
-       self.generations_with_chromosome_frequency_with_vibration_pause,
-       self.generations_GP_F450,
-       self.generations_GP_F440,
-       self.number_of_evaluations_per_episode,
-       self.evaluation_runtime,
-       self.spreading_waitingtime,
+arena_type : %s
+frame_per_second : %d
+image :
+    width : %d
+    height : %d
+""" % (self.number_bees,
+       self.number_generations,
+       self.number_evaluations_per_episode,
+       self.evaluation_run_time,
+       self.spreading_waiting_time,
        self.population_size,
        self.number_evaluations_per_chromosome,
-       self.casus_rtc_file_names [0],
-       self.casus_rtc_file_names [1],
        self.stopped_threshold,
        self.aggregation_minDuration_thresh,
        self.fitness_function,
-       self.constant_airflow,
-       self.arena_type)
+       str (self.constant_airflow),
+       self.arena_type,
+       self.frame_per_second,
+       self.image_width,
+       self.image_height)
 
 if __name__ == '__main__':
-    print "Debugging config.py"
-    c = Config ('config.test')
-    print c
+    print ("Debugging config.py")
+    c = Config ('config')
+    print (c)

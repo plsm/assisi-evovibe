@@ -7,22 +7,34 @@ import csv
 import Image
 import assisipy
 
+class Counter:
+    """
+    Maintains a counter on the current state of the incremental evolution algorithm.
+    Since the program has to be stopped at the end of the day and resumed in the following day, we need to compute where we are when we resume.
+    Namely, we need to know the current generation number, and in a generation which chromosome is being evaluated.
+    """
+    def __init__ (self, first_iteration = True):
+        if first_iteration:
+            self.base_generation = 0
+            self.base_evaluation_in_generation = 0
+        else:
+            self.base_generation = -999
+            self.base_evaluation_in_generation = -999
+
 class Evaluator:
     """
-    Class that implements the evaluator used by the inspyred evoluationary algorithm classes.
+    Class that implements the evaluator used by the inspyred evolutionary algorithm classes.
     The evaluator computes the fitness function.  Each chromosome represents a vibration model.
 
     :param config: A Python object with the following attributes
     """
-    def __init__ (self, config, counter, es, episode):
+    def __init__ (self, config, es, episode, counter = Counter ()):
         self.config = config
-        self.counter = counter
         self.es = es
         self.episode = episode
-        self.run_vibration_model = None
-        self.used_casu_index
+        self.counter = counter
 
-    def population_evaluator (self, population, args):
+    def population_evaluator (self, population, args = None):
         """
         Evaluate a population.  This is main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
         """
@@ -39,7 +51,7 @@ class Evaluator:
         result = 0.0
         fits = []
         for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
-            f = self.exp_step (chromosome, index_evaluation)
+            f = self.iteration_step (chromosome, index_evaluation)
             result += f
             fits.append (f)
         self.log_chromosome (chromosome, fits)
@@ -47,29 +59,26 @@ class Evaluator:
         return result
 
         
-    def exp_step(self, candidate, index_evaluation):
+    def iteration_step (self, candidate, index_evaluation):
         """
         Experimental step where a candidate chromosome evaluation is done.
         """
         self.episode.increment_evaluation_counter ()
-        self.cool_down_casus ()
         print "Episode %d - Evaluation  %d" % (self.episode.episode_index, self.episode.current_evaluation_in_episode)
+        picked_arena = self.episode.select_arena ()
         (recording_process, filename_real) = self.start_iteration_video ()
         print "         Starting vibration model: " + str (candidate) + "..."
-        if self.config.constant_airflow == 'y':
-            for ein_casu in experiment.los_casu:
-                ein_casu.set_airflow_intensity (1)
-        self.run_vibration_model (candidate, experiment.los_casus [self.active_casu_index], self.config.evaluation_runtime)
+        picked_arena.run_vibration_model (self.config, candidate)
         print "         Vibration model finished!"
-        self.spread_bees ()
+        ########################### check code at this point
         recording_process.wait ()
         print "Iteration video finished!"
-        (imgpath, imgname_incomplete) = self.split_iteration_video (filename_real)
-        self.compare_images (imgpath, imgname_incomplete)
-        evaluation_score = self.computeFitness (imgpath, imgname_incomplete)
+        self.split_iteration_video (filename_real)
+        self.compare_images (picked_arena)
+        evaluation_score = self.compute_fitness (imgpath, imgname_incomplete)
         print ("\n\niteration " + str (self.episode.current_evaluation_in_episode)+" is finished\n")
         print ("Evaluation of " + str (candidate) + " is " + str (evaluation_score))
-        #raw_input ("Press ENTER to continue DEBUG")
+        raw_input ("Press ENTER to continue DEBUG")
         return evaluation_score
 
     def check_prepare_casus (self):
@@ -110,52 +119,37 @@ class Evaluator:
         :return: a tuple with the process that records the iteration the video filename
         """
         print "\n\n* ** Starting Iteration Video..."
-        num_buffers = (self.config.evaluation_runtime + self.config.spreading_waitingtime) * self.config.frame_per_second
-        filename_real = self.config.experimentpath + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
+        num_buffers = (self.config.evaluation_run_time + self.config.spreading_waiting_time) * self.config.frame_per_second
+        filename_real = self.episode.__episode_path + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
         bashCommand_video = 'gst-launch-0.10' + \
                             ' --gst-plugin-path=/usr/local/lib/gstreamer-0.10/' + \
                             ' --gst-plugin-load=libgstaravis-0.4.so' + \
                             ' -v aravissrc num-buffers=' + str (int (num_buffers)) + \
-                            ' ! video/x-raw-yuv,width=' + str (self.config.arena_image.width) + ',height=' + str (self.config.arena_image.height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
+                            ' ! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
                             ' ! jpegenc ! avimux name=mux ! filesink location=' + filename_real    # with time - everytime generate a new file
         return (subprocess.Popen (bashCommand_video, shell=True, executable='/bin/bash'), filename_real)
 
-    def spread_bees (self):
-        """
-        After an evaluation has finished we have to make sure that bees are spread.
-        """
-        print ("now waiting for " + str (self.config.spreading_waitingtime) + " sec for the bees to spread")
-        for ein_casu in experiment.los_casus:
-            ein_casu.set_airflow_intensity (1)
-            ein_casu.set_diagnostic_led_rgb (r = 1, g = 0, b = 0)
-        time.sleep (2.0 / self.config.frame_per_second)
-        for ein_casu in experiment.los_casus:
-            ein_casu.diagnostic_led_standby ()
-        time.sleep (self.config.spreading_waitingtime - 2) # Time necessary for bees to spread again      
-        for ein_casu in experiment.los_casus:
-            ein_casu.airflow_standby ()
 
     def split_iteration_video (self, filename_real):
         """
         Split the iteration video into images.  We only need the images from the evaluation run time period.
 
+        The images are written in folder tmp relative to 
+
         TODO:
         See how to use the ffmpeg program to only split a part of a video.
         """
         print "\n\n* ** Starting Image Split..."
-        imgpath = self.config.experimentpath + "Images/"
-        imgname_incomplete = "iterationimage_" + str (self.episode.current_evaluation_in_episode) + "_"
         bashCommandSplit = "ffmpeg" + \
                            " -i " + filename_real + \
                            " -r " + str (self.config.frame_per_second) + \
-                           " -f image2 " + imgpath + imgname_incomplete + "%4d.jpg"
+                           " -f image2 tmp/iteration-image-%4d.jpg"
         p = subprocess.Popen (bashCommandSplit, shell=True, executable='/bin/bash') #to create and save the real images from the video depending on the iteration number
         p.wait ()
         print ("iteration " + str (self.episode.current_evaluation_in_episode) + " video is splitted")
         print "Image split finished!"
-        return (imgpath, imgname_incomplete)
         
-    def compare_images (self, imgpath, imgname_incomplete):
+    def compare_images (self, picked_arena):
         """
         Compare images created in a chromosome evaluation and generate a CSV file.
         The first column has the pixel difference between the current iteration image and the background image in the active CASU.
@@ -163,28 +157,16 @@ class Evaluator:
         The third column has the pixel difference between the current iteration image and the background image in the passive CASU.
         The fourth column has the pixel difference between the current iteration image and the previous iteration image in the passive CASU.
         """
-        fname = self.config.experimentpath + "iteration-" + str (self.episode.current_evaluation_in_episode) + "-data.csv"
-        fp = open (fname, 'w')
-        f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
+        fp = open ("tmp/image-processing.csv", 'w')
+        f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         f.writerow (["background_active", "previous_iteration_active", "background_passive", "previous_iteration_passive"])
-        background_data = Image.open (imgpath + "Background.jpg").getdata ()
-        previous_data = None
-        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
+        n = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
         for i in range (1, n + 1):
-            fname = imgname_incomplete + "{:04d}.jpg".format (i)
-            iteration_data = Image.open (imgpath + fname).getdata ()
-            bp = self.config.arena_image.bee_percentage_around_casus (background_data, iteration_data)
-            if previous_data != None:
-                mb = self.config.arena_image.moving_bees_around_casus (previous_data, iteration_data)
-            else:
-                mb = (-1, -1)
-            row = [bp [0], mb [0], bp [1], mb [1]]
-            f.writerow (row)
-            previous_data = iteration_data
+            f.write_row (picked_arena.compare_images (i))
         fp.close ()
 
 
-    def computeFitness (self, imgpath, imgname_incomplete):
+    def compute_fitness (self, imgpath, imgname_incomplete):
 
         #self.fitness = self.averageBeeCountDifference(imgpath,imgname_incomplete)
 
@@ -192,14 +174,14 @@ class Evaluator:
             time_to_agg = self.timeToAggregate ()
             print ("time to aggregate:" + str (time_to_agg))
             if time_to_agg > -1:
-                result = (self.config.evaluation_runtime - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_runtime)
+                result = (self.config.evaluation_run_time - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_run_time)
             else: # if time_to_agg == -1 it means the aggregation has never happend, so we set the fitness to zero
                 result = 0
         elif self.config.fitness_function == 'timeToAggregate_andStay':
             time_to_agg = self.timeToAggregate_andStay ()
             print ("time to aggregate:" + str (time_to_agg))
             if time_to_agg > -1:
-                result = (self.config.evaluation_runtime - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_runtime)
+                result = (self.config.evaluation_run_time - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_run_time)
             else: # if time_to_agg == -1 it means the aggregation has never happend, so we set the fitness to zero
                 result = 0
         elif self.config.fitness_function == 'non_moving_pixels_bee_blobs':
@@ -211,7 +193,7 @@ class Evaluator:
         return result
 
     def old_timeToAggregate (self, imgpath, imgname_incomplete):
-        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
+        n = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
         for i in range (1, n + 1):
             fname = imgname_incomplete + "{:04d}.jpg.csv".format (i)
             with open (imgpath + fname, 'rb') as csvfile:

@@ -1,6 +1,12 @@
-import subprocess #spawn new processes
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import arena
+
+import subprocess
 import os
 import os.path
+import random
 
 class Episode:
     """
@@ -15,11 +21,11 @@ class Episode:
     This class can be used by the incremental evolution or by a parameter sweep.
     """
 
-    def __init__ (self, config):
+    def __init__ (self, config, worker_zmqs):
         self.config = config
+        self.worker_zmqs = worker_zmqs
         self.current_evaluation_in_episode = 0
         self.episode_index = 1
-        self.record_process_flag = False
 
     def initialise (self):
         """
@@ -27,48 +33,32 @@ class Episode:
 
         * create the background image;
 
-        * ask the user for the characteristics of the arena image;
+        * ask the user for the characteristics of the arena(s) image and the CASUs;
 
-        * ask the user to put bees in the arena;
-
-        * start the episode video process
+        * ask the user to put bees in the arena(s);
         """
+        self.__episode_path = "%sepisodes/%03d/" % (self.config.experiment_folder, self.episode_index)
+        try:
+            os.makedirs (self.__episode_path)
+        except OSError:
+            pass
         self.make_background_image ()
-        self.image_properties ()
-        raw_input ('\nPlace %d bees in the arena and press ENTER' % self.config.number_of_bees)
-        #self.start_episode_video ()
+        self.ask_arenas ()
+        raw_input ('\nPlace %d bees in the arena(s) and press ENTER' % self.config.number_bees)
 
     def increment_evaluation_counter (self):
         """
         Increment the evaluation counter.  If we have reached the end of an episode, we finish it and start a new episode.
         """
-        if (self.current_evaluation_in_episode == self.config.number_of_evaluations_per_episode):
+        if (self.current_evaluation_in_episode == self.config.number_evaluations_per_episode):
             print "\n\n* ** New Episode ** *"
             self.finish ()
             self.episode_index += 1
-            self.init ()
+            self.initialise ()
             self.current_evaluation_in_episode = 0
         else:
             self.current_evaluation_in_episode += 1
 
-    def finish (self, last_finish = False):
-        """
-        In the finish phase of an episode we:
-
-        * terminate the episode recording process;
-
-        * tell the user to remove the bees from the arena;
-
-        * essential files that were produced during an episode are moved to the experiment repository;
-
-        * unneeded files or files that can be recreated from the essential files are deleted.
-        """
-        if self.record_process_flag:
-            self.recording_process.terminate ()
-        print "Remove the bees from the arena"
-        self.save_episode_files (last_finish)
-        self.remove_episode_files (last_finish)
-        
     def make_background_image (self):
         """
         Create the background video and image.
@@ -80,91 +70,100 @@ class Episode:
         disturb the arena.  The bee aggregation is sensitive to changes between the background image and evaluation images.
         """
         print "\n\n* ** Creating background image..."
-        filename = self.config.experimentpath + 'Background.avi'
+        filename = self.__episode_path + 'Background.avi'
         bashCommand = 'gst-launch-0.10 --gst-plugin-path=/usr/local/lib/gstreamer-0.10/ --gst-plugin-load=libgstaravis-0.4.so -v aravissrc num-buffers=1 ' + \
-                      '! video/x-raw-yuv,width=' + str (self.config.arena_image.width) + ',height=' + str (self.config.arena_image.height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
+                      '! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
                       ' ! jpegenc ! avimux name=mux ! filesink location=' + filename    # with time - everytime generate a new file
         p = subprocess.Popen (bashCommand, shell = True, executable = '/bin/bash') #run the recording stream
         p.wait ()
         bashCommandSplit = "ffmpeg" + \
             " -i " + filename + \
             " -r 0.1" + \
-            " -f image2 " + self.config.experimentpath + "Images/Background.jpg" #definition to extract the single image for background from the video
+            " -f image2 " + self.__episode_path + "Background.jpg" #definition to extract the single image for background from the video
         p = subprocess.Popen (bashCommandSplit, shell = True, executable = '/bin/bash') #run the script of the extracting
         p.wait ()
         print ("background image is ready")
 
-    def image_properties (self):
+    def ask_arenas (self):
         """
-        Ask the user the image properties.  This depend on the arena type that is being used.
+        Ask the user how many arenas are going to be used and their characteristics.
         """
-        gimp_command = "gimp " + self.config.experimentpath + "Images/Background.jpg"
-        subprocess.Popen (gimp_command, shell = True, executable = '/bin/bash')
-        self.config.arena_image.ask_image_properties ()
-        imgpath = self.config.experimentpath + "Images/"
-        self.config.arena_image.create_measure_area_image (imgpath)
-        print "Created measured area image"
+        p = subprocess.Popen ([
+            '/usr/bin/gimp',
+            self.__episode_path + "Background.jpg"])
+        go = True
+        self.arenas = []
+        index = 1
+        while go:
+            img_path = "%sarena-%d/" % (self.__episode_path, index)
+            if self.config.arena_type == 'StadiumBorderArena':
+                new_arena = arena.StadiumBorderArena (self.worker_zmqs, img_path)
+            else:
+                print ("Unknown arena type: %s" % (str (self.config.arena_type)))
+            self.arenas.append (new_arena)
+            os.makedirs (img_path)
+            new_arena.create_region_of_interests_image (self.__episode_path)
+            new_arena.create_mask_images_casu_images (self.config, self.__episode_path)
+            new_arena.write_properties ()
+            index += 1
+            go = raw_input ('Are there more arena(s) (y/n)? ').upper () [0] == 'Y'
+        print ("Close GIMP")
+        p.wait ()
+
+    def select_arena (self):
+        """
+        Check the status of the arenas and select an arena using a roulette wheel approach.
+        Returns the selected arena.
+        """
+        ok = False
+        while not ok:
+            status = []
+            total_sum = 0
+            for an_arena in self.arenas:
+                (value, temps) = an_arena.status ()
+                total_sum += value
+                status.append (value)
+                print ("Temperature status: %s." % (str (temps)))
+            if total_sum == 0:
+                print ("All arenas have a temperature above the minimum threshold!")
+                raw_input ("Press ENTER to try again.")
+            else:
+                ok = True
+        x = total_sum * random.random ()
+        picked = 0
+        print x, "/", total_sum, status
+        while x >= status [picked]:
+            x -= status [picked]
+            picked += 1
+        print ("Picked arena #%d." % (picked))
+        return self.arenas [picked]
         
-    def start_episode_video (self):
+    
+    # def image_properties (self):
+    #     """
+    #     Ask the user the image properties.  This depend on the arena type that is being used.
+    #     """
+    #     gimp_command = "gimp " + self.config.experimentpath + "Images/Background.jpg"
+    #     subprocess.Popen (gimp_command, shell = True, executable = '/bin/bash')
+    #     self.config.arena_image.ask_image_properties ()
+    #     imgpath = self.config.experimentpath + "Images/"
+    #     self.config.arena_image.create_measure_area_image (imgpath)
+    #     print "Created measured area image"
+        
+    def finish (self):
         """
-        Create the child process that is going to record a video of an episode.
+        In the finish phase of an episode we:
 
-        We have to take into account how many evaluations are done by episode,
-        and the duration of an evaluation.  The latter depends on the run time
-        of a chromosome vibration model, on the spreading wait time, but also
-        on the time it takes to process the data of one evaluation.  The latter
-        may be relevant if data is stored in a disk with a low latency.
+        * terminate the episode recording process;
 
-        TODO:
-        Check time it takes to process the data of one evaluation
+        * tell the user to remove the bees from the arena;
+
+        * essential files that were produced during an episode are moved to the experiment repository;
+
+        * unneeded files or files that can be recreated from the essential files are deleted.
         """
-        num_buffers = \
-            self.config.number_of_evaluations_per_episode \
-            * (self.config.evaluation_runtime + self.config.spreading_waitingtime) \
-            * self.config.frame_per_second
-        filename_real = self.config.experimentpath + 'episodeVideo_' + str (self.episode_index) + '.avi' #reaL video
-        bashCommand_video = 'gst-launch-0.10' + \
-          ' --gst-plugin-path=/usr/local/lib/gstreamer-0.10/' + \
-          ' --gst-plugin-load=libgstaravis-0.4.so' + \
-          ' -v aravissrc num-buffers=' + str (int (num_buffers)) + \
-          ' ! video/x-raw-yuv,width=' + str (self.config.arena_image.width) + ',height=' + str (self.config.arena_image.height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
-          ' ! jpegenc ! avimux name=mux ! filesink location=' + filename_real    # with time - everytime generate a new file
-        self.recording_process = subprocess.Popen (bashCommand_video, shell=True, executable='/bin/bash')
-        self.record_process_flag = True
-
-    def save_episode_files (self, last_finish):
-        """
-        Save the background video and the iteration videos images created in a bee
-        evaluation episode.
-        """
-        print "\n\nSaving episode files..."
-        episode_path = self.config.repositorypath + "episode_" + str (self.episode_index) + "/"
-        try:
-            os.mkdir (episode_path)
-        except:
-            pass
-        files_to_save = [
-            'Background.avi',
-            'Images/Measured-Area.jpg',
-            'episodeVideo_' + str (self.episode_index) + '.avi']
-        for filename in files_to_save:
-            try:
-                os.rename (
-                    self.config.experimentpath + filename,
-                    episode_path               + os.path.basename (filename))
-            except OSError:
-                print ("Not found: " + filename)
-        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
-        for evaluation_index in xrange (1, self.config.number_of_evaluations_per_episode + 1):
-            iterationvid_file = "iterationVideo_" + str (evaluation_index) + ".avi"
-            try:
-                os.rename (
-                    self.config.experimentpath + iterationvid_file,
-                    episode_path               + iterationvid_file)
-            except OSError:
-                print ("Not found: " + iterationvid_file)
-        print "Episode files saved!"
-
+        raw_input ("Remove the bees from the arena(s) and press ENTER to continue.")
+        
     def remove_episode_files (self, last_finish):
         """
         Remove the files in the Images/ directory that were created in a bee evaluation episode.
@@ -172,7 +171,7 @@ class Episode:
         print "\n\nDeleting episode files..."
         imgpath_incomplete_1 = self.config.experimentpath + "Images/iterationimage_"
         n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
-        for evaluation_index in xrange (1, self.config.number_of_evaluations_per_episode + 1):
+        for evaluation_index in xrange (1, self.config.number_evaluations_per_episode + 1):
             imgpath_incomplete_2 = imgpath_incomplete_1 + str (evaluation_index) + "_"
             for i in xrange (1, n + 1):
                 try:
