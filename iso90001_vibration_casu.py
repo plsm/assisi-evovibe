@@ -62,7 +62,7 @@ for (index, le_casu) in casus:
                         warning_flag = casu_temp > cool_temperature + 1
                     le_casu.set_speaker_vibration (freq = vibration_frequency, intens = 100)
                     time.sleep (vibration_time)
-#                    le_casu.set_speaker_vibration (freq = 0, intens = 0) # sometimes it does not work!!!
+                    # le_casu.set_speaker_vibration (freq = 0, intens = 0) # sometimes it does not work!!! It cause CASUs to heat.
                     le_casu.speaker_standby ()
                     time.sleep (pause_time)
                 print " Finished!"

@@ -47,6 +47,7 @@ class Evaluator:
         Experimental step where a candidate chromosome evaluation is done.
         """
         self.episode.increment_evaluation_counter ()
+        self.cool_down_casus ()
         print "Episode %d - Evaluation  %d" % (self.episode.episode_index, self.episode.current_evaluation_in_episode)
         (recording_process, filename_real) = self.start_iteration_video ()
         print "         Starting vibration model: " + str (candidate) + "..."
@@ -66,6 +67,10 @@ class Evaluator:
         #raw_input ("Press ENTER to continue DEBUG")
         return evaluation_score
 
+    def cool_down_casus (self):
+        for c in [self.active_casu, self.passive_casus]:
+            c.set_temp (CASU_TEMPERATURE)
+            
     def start_iteration_video (self):
         """
         Starts the iteration video.  This video will record a chromosome evaluation and the bee spreading period.
@@ -92,7 +97,7 @@ class Evaluator:
         self.passive_casu.set_airflow_intensity (1)
         self.active_casu.set_diagnostic_led_rgb(r=1,g=0,b=0)
         self.passive_casu.set_diagnostic_led_rgb(r=1,g=0,b=0)
-        time.sleep (2) # this should be value dependent on the frame rate (we want to have the led on in the video)
+        time.sleep (2.0 / self.config.frame_per_second)
         self.active_casu.diagnostic_led_standby() # to turn the top led off
         self.passive_casu.diagnostic_led_standby() # to turn the top led off
         time.sleep (self.config.spreading_waitingtime - 2) # Time necessary for bees to spread again      
@@ -160,19 +165,21 @@ class Evaluator:
         #self.fitness = self.averageBeeCountDifference(imgpath,imgname_incomplete)
 
         if self.config.fitness_function == 'timeToAggregate':
-            time_to_agg = self.timeToAggregate (imgpath, imgname_incomplete)
+            time_to_agg = self.timeToAggregate ()
             print ("time to aggregate:" + str (time_to_agg))
             if time_to_agg > -1:
                 result = (self.config.evaluation_runtime - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_runtime)
             else: # if time_to_agg == -1 it means the aggregation has never happend, so we set the fitness to zero
                 result = 0
         elif self.config.fitness_function == 'timeToAggregate_andStay':
-            time_to_agg = self.timeToAggregate_andStay (imgpath, imgname_incomplete)
+            time_to_agg = self.timeToAggregate_andStay ()
             print ("time to aggregate:" + str (time_to_agg))
             if time_to_agg > -1:
                 result = (self.config.evaluation_runtime - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_runtime)
             else: # if time_to_agg == -1 it means the aggregation has never happend, so we set the fitness to zero
                 result = 0
+        elif self.config.fitness_function == 'non_moving_pixels_bee_blobs':
+            result= self.fitness_non_moving_pixels_bee_blobs ()
         else:
             raise "Unknown fitness function: " + str (self.config.fitness_function)
             
@@ -214,7 +221,7 @@ class Evaluator:
         fp.close ()
         return -1
 
-    def timeToAggregate_andStay(self, imgpath, imgname_incomplete):
+    def timeToAggregate_andStay (self):
         agg_status = False
         agg_start = -1
         #aggregation_happend_at = -1
@@ -240,7 +247,30 @@ class Evaluator:
                     agg_start = -1
         return -1
 
-    
+    def fitness_non_moving_pixels_bee_blobs (self):
+        """This function computes the sum of the number of non-moving pixels in frames
+        where there are bee blobs
+        in the active CASU.
+
+        This fitness function depends on the aggregation threshold which is
+        the percentage of pixels that are different when considering the
+        background and an iteration.
+
+        """
+        result = 0
+        fname = self.config.experimentpath + "iteration-" + str (self.episode.current_evaluation_in_episode) + "-data.csv"
+        fp = open (fname, 'r')
+        freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
+        freader.next () # skip header row
+        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
+        for i in xrange (1, n + 1):
+            row = freader.next ()
+            bcount = float (row [0])   #-float(row[0])   ### MAKE SURE ABOUT THE ORDER OF THE CASUS: WHICH ONE IS VIBRATING ACCORDING TO GERALDS SOFTWARE
+            dcount = float (row [1])
+            if bcount >= self.aggregation_threhsoldN
+                result += self.config.stopped_threshold - dcount
+        return result
+
     def log_chromosome (self, chromosome, fitnesses):
         """
         Save the result of a chromosome evaluation.

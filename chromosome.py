@@ -52,7 +52,7 @@ class GF_SCAI (AbstractChromosome):
         while time.time () - zero_time < evaluation_runtime:
             casu.set_speaker_vibration (freq = frequency, intens = GF_SCAI.INTENSITY)
             time.sleep (GF_SCAI.vibtimeA)
-            casu.set_speaker_vibration (freq = 0, intens = 0)
+            casu.speaker_standby ()
             time.sleep (GF_SCAI.pausetimeA)
         print ("vibration stops")
 
@@ -99,7 +99,7 @@ class GFPD_SCAI (AbstractChromosome):
         while time.time () - zero_time < evaluation_runtime:
             casu.set_speaker_vibration (freq = frequency, intens = GF_SCAI.INTENSITY)
             time.sleep (vibration_time)
-            casu.set_speaker_vibration (freq = 0, intens = 0)
+            casu.speaker_standby ()
             time.sleep (pause_time)
         print ("vibration stops")
 
@@ -149,7 +149,7 @@ class GP_F450 (AbstractChromosome):
             casu.set_speaker_vibration (freq = frequency, intens = GF_SCAI.INTENSITY)
             time.sleep (vibration_time)
             if pause_time > 0:
-                casu.set_speaker_vibration (freq = 0, intens = 0)
+                casu.speaker_standby ()
                 time.sleep (pause_time)
         print ("vibration stops")
 
@@ -186,7 +186,7 @@ class GP_F440 (AbstractChromosome):
             casu.set_speaker_vibration (freq = frequency, intens = GF_SCAI.INTENSITY)
             time.sleep (vibration_time)
             if pause_time > 0:
-                casu.set_speaker_vibration (freq = 0, intens = 0)
+                casu.speaker_standby ()
                 time.sleep (pause_time)
         print ("vibration stops")
 
@@ -224,7 +224,7 @@ class GFI (AbstractChromosome):
         print ("vibration starts.....")
         casu.set_speaker_vibration (freq = frequency, intens = intensity)
         time.sleep (evaluation_runtime)
-        casu.set_speaker_vibration (freq = 0, intens = 0)
+        casu.speaker_standby ()
         print ("vibration stops")
 
     @staticmethod
@@ -309,7 +309,7 @@ class NatureDraftChromosome (AbstractChromosome):
         while time.time () - zero_time < evaluation_runtime:
             casu.set_speaker_vibration (freq = frequency, intens = intensity)
             time.sleep (duration_pulses)
-            casu.set_speaker_vibration (freq = 0, intens = 0)
+            casu.speaker_standby ()
             time.sleep (duration_pauses)
             state += 1
             if state == number_pulses:

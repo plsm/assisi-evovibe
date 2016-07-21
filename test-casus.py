@@ -30,7 +30,7 @@ for (rtc_file_name, casu) in casus:
     for i in xrange (9):
         casu.set_speaker_vibration (freq = 440, intens = 100)
         time.sleep (0.9)
-        casu.set_speaker_vibration (freq = 0, intens = 0)
+        casu.speaker_standby ()
         time.sleep (0.1)
     casu.set_airflow_intensity (1)
     time.sleep (9)
