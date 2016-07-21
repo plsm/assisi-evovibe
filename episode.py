@@ -98,6 +98,8 @@ class Episode:
         """
         Ask the user the image properties.  This depend on the arena type that is being used.
         """
+        gimp_command = "gimp " + self.config.experimentpath + "Images/Background.jpg"
+        subprocess.Popen (gimp_command, shell = True, executable = '/bin/bash')
         self.config.arena_image.ask_image_properties ()
         imgpath = self.config.experimentpath + "Images/"
         self.config.arena_image.create_measure_area_image (imgpath)

@@ -1,21 +1,26 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import time
 import subprocess #spawn new processes
 import csv
 import Image
+import assisipy
 
 class Evaluator:
     """
     Class that implements the evaluator used by the inspyred evoluationary algorithm classes.
     The evaluator computes the fitness function.  Each chromosome represents a vibration model.
+
+    :param config: A Python object with the following attributes
     """
-    def __init__ (self, config, active_casu, passive_casu, counter, es, episode):
+    def __init__ (self, config, counter, es, episode):
         self.config = config
-        self.active_casu = active_casu
-        self.passive_casu = passive_casu
         self.counter = counter
         self.es = es
         self.episode = episode
         self.run_vibration_model = None
+        self.used_casu_index
 
     def population_evaluator (self, population, args):
         """
@@ -52,9 +57,9 @@ class Evaluator:
         (recording_process, filename_real) = self.start_iteration_video ()
         print "         Starting vibration model: " + str (candidate) + "..."
         if self.config.constant_airflow == 'y':
-            self.active_casu.set_airflow_intensity (1)
-            self.passive_casu.set_airflow_intensity (1)
-        self.run_vibration_model (candidate, self.active_casu, self.config.evaluation_runtime)
+            for ein_casu in experiment.los_casu:
+                ein_casu.set_airflow_intensity (1)
+        self.run_vibration_model (candidate, experiment.los_casus [self.active_casu_index], self.config.evaluation_runtime)
         print "         Vibration model finished!"
         self.spread_bees ()
         recording_process.wait ()
@@ -67,10 +72,37 @@ class Evaluator:
         #raw_input ("Press ENTER to continue DEBUG")
         return evaluation_score
 
-    def cool_down_casus (self):
-        for c in [self.active_casu, self.passive_casus]:
-            c.set_temp (CASU_TEMPERATURE)
-            
+    def check_prepare_casus (self):
+        """
+        Check and prepare the CASUs for a chromosome evaluation.
+        If one of the CASUs is above the set temperature (plus 1 degree) we ask the user to try to solve the problem.
+        """
+        CASU_TEMPERATURE = 28
+        for el_casu in experiment.los_casus:
+            not_ok = True
+            while not_ok:
+                casu_temp = el_casu.get_temp (assisipy.casu.TEMP_WAX)
+                if casu_temp > CASU_TEMPERATURE + 1:
+                    print "Casu %s temperature is %f.  Solve the problem or abort the program." % (el_casu.name (), casu_temp)
+                    raw_input ("Press ENTER when you are ready")
+                    el_casu.set_temp (CASU_TEMPERATURE)
+                    el_casu.speaker_standby ()
+                    el_casu.ir_standby ()
+                    el_casu.set_diagnostic_led_rgb (r = 1, g = 0, b = 0)
+                    time.sleep (1)
+                    el_casu.set_diagnostic_led_rgb (r = 0, g = 0, b = 0)
+                    for le_casu in experiment.los_casus:
+                        le_casu.set_airflow_intensity (1)
+                    time.sleep (10)
+                    for le_casu in experiment.los_casus:
+                        le_casu.airflow_standby ()
+                else:
+                    not_ok = False
+        for ein_casu in experiment.los_casus:
+            ein_casu.set_temp (CASU_TEMPERATURE)
+            ein_casu.speaker_standby ()
+        self.used_casu_index = 1 - self.used_casu_index
+                    
     def start_iteration_video (self):
         """
         Starts the iteration video.  This video will record a chromosome evaluation and the bee spreading period.
@@ -93,16 +125,15 @@ class Evaluator:
         After an evaluation has finished we have to make sure that bees are spread.
         """
         print ("now waiting for " + str (self.config.spreading_waitingtime) + " sec for the bees to spread")
-        self.active_casu.set_airflow_intensity (1)
-        self.passive_casu.set_airflow_intensity (1)
-        self.active_casu.set_diagnostic_led_rgb(r=1,g=0,b=0)
-        self.passive_casu.set_diagnostic_led_rgb(r=1,g=0,b=0)
+        for ein_casu in experiment.los_casus:
+            ein_casu.set_airflow_intensity (1)
+            ein_casu.set_diagnostic_led_rgb (r = 1, g = 0, b = 0)
         time.sleep (2.0 / self.config.frame_per_second)
-        self.active_casu.diagnostic_led_standby() # to turn the top led off
-        self.passive_casu.diagnostic_led_standby() # to turn the top led off
+        for ein_casu in experiment.los_casus:
+            ein_casu.diagnostic_led_standby ()
         time.sleep (self.config.spreading_waitingtime - 2) # Time necessary for bees to spread again      
-        self.active_casu.airflow_standby ()
-        self.passive_casu.airflow_standby ()
+        for ein_casu in experiment.los_casus:
+            ein_casu.airflow_standby ()
 
     def split_iteration_video (self, filename_real):
         """
@@ -148,13 +179,6 @@ class Evaluator:
             else:
                 mb = (-1, -1)
             row = [bp [0], mb [0], bp [1], mb [1]]
-            # row = []
-            # for active_casu_flag in [True, False]:
-            #     row.append (self.config.arena_image.pixel_count_difference (background_data, iteration_data, active_casu_flag))
-            #     if previous_data != None:
-            #         row.append (self.config.arena_image.pixel_count_difference (previous_data, iteration_data, active_casu_flag))
-            #     else:
-            #         row.append (-1)
             f.writerow (row)
             previous_data = iteration_data
         fp.close ()
@@ -202,7 +226,7 @@ class Evaluator:
             #time.sleep (1);
         return -1
 
-    def timeToAggregate (self, imgpath, imgname_incomplete):
+    def timeToAggregate (self):
         """
         Read the CSV file that resulted from processing an iteration images.
         """
@@ -235,7 +259,7 @@ class Evaluator:
                 row = freader.next()
                 bcount = float (row [0])   #-float(row[0])   ### MAKE SURE ABOUT THE ORDER OF THE CASUS: WHICH ONE IS VIBRATING ACCORDING TO GERALDS SOFTWARE
                 dcount = float (row [1])
-                if bcount >= self.aggregation_threhsoldN and dcount <= self.config.stopped_threshold:
+                if bcount >= self.config.aggregation_threhsoldN and dcount <= self.config.stopped_threshold:
                     if agg_status==False:
                         agg_status = True
                         agg_start = i
@@ -267,7 +291,7 @@ class Evaluator:
             row = freader.next ()
             bcount = float (row [0])   #-float(row[0])   ### MAKE SURE ABOUT THE ORDER OF THE CASUS: WHICH ONE IS VIBRATING ACCORDING TO GERALDS SOFTWARE
             dcount = float (row [1])
-            if bcount >= self.aggregation_threhsoldN
+            if bcount >= self.config.aggregation_threhsoldN:
                 result += self.config.stopped_threshold - dcount
         return result
 

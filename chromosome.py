@@ -18,18 +18,6 @@ class AbstractChromosome:
     """
     pass
 
-class NewModel (AbstractChromosome):
-    """
-    All chromosomes used by the incremental evolution algorithm must have the following set of static methods:
-    """
-    def run_vibration_model (chromosome, casu, evaluation_runtime)
-        parameterA = chromosome [0]
-        parameterB = chromosome [1]
-
-    def random_generator (random, args)
-        return [parameterA, parameterB]
-        pass
-
 class GF_SCAI (AbstractChromosome):
     """
     This chromosome contains a single gene that represents the vibration frequency.  The vibration intensity is determined by a static class attribute.

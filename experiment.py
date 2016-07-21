@@ -1,8 +1,20 @@
 from assisipy import casu
-
+import assisipy
 import os
 import csv
 import time
+
+import signal
+import sys
+
+los_casus = []
+
+def signal_handler(signal, frame):
+    print('You pressed Ctrl+C!')
+    for o_casu in los_casus:
+        o_casu.stop ()
+    sys.exit(0)
+
 
 CASU_TEMPERATURE = 28
 """
@@ -35,58 +47,58 @@ def connect_casu (config):
     Create the CASU instances that are going to be used by the chromosome evaluation functions.
     Initialise the CASUs so that we can create the background image.
     """
-    active_casu = casu.Casu (
-        rtc_file_name = config.active_casu_rtc_file_name,
-        log = True,
-        log_folder = config.experimentpath + "logs")
-    passive_casu = casu.Casu (
-        rtc_file_name = config.passive_casu_rtc_file_name,
-        log = True,
-        log_folder = config.experimentpath + "logs")
-    test_casus ([(config.active_casu_rtc_file_name, active_casu), (config.passive_casu_rtc_file_name, passive_casu)])
-    for a_casu in [active_casu, passive_casu]:
+    los_casus = [
+        casu.Casu (
+            rtc_file_name = config.casus_rtc_file_names [0],
+            log = True,
+            log_folder = config.experimentpath + "logs"),
+        casu.Casu (
+            rtc_file_name = config.casus_rtc_file_names [1],
+            log = True,
+            log_folder = config.experimentpath + "logs")
+    signal.signal(signal.SIGINT, signal_handler)
+    for a_casu in los_casus:
         a_casu.diagnostic_led_standby () # turn the top led off
         a_casu.speaker_standby ()
         a_casu.set_diagnostic_led_rgb (r = 0, g = 0, b = 0)
         a_casu.ir_standby ()             # turn the IR sensor off to make the background image
         a_casu.set_temp (CASU_TEMPERATURE)
         a_casu.airflow_standby ()
-    return (active_casu, passive_casu)
     
     
-def test_casus (casus):
+def test_casus ():
     print "\n\n* ** CASU test"
-    for (rtc_file_name, casu) in casus:
-        raw_input ("Press ENTER to test " + rtc_file_name)
+    for um_casu in los_casus:
+        raw_input ("Press ENTER to test " + um_casu.name ())
         print "   Testing IR sensors..."
         for i in xrange (4):
-            casu.ir_standby ("Activate")
+            um_casu.ir_standby ("Activate")
             time.sleep (1)
-            casu.ir_standby ("Standby")
+            um_casu.ir_standby ("Standby")
             time.sleep (1)
         print "   Testing LED..."
         for i in xrange (3):
-            casu.set_diagnostic_led_rgb (r = 1, g = 0, b = 0)
+            um_casu.set_diagnostic_led_rgb (r = 1, g = 0, b = 0)
             time.sleep (1)
-            casu.set_diagnostic_led_rgb (r = 1, g = 1, b = 0)
+            um_casu.set_diagnostic_led_rgb (r = 1, g = 1, b = 0)
             time.sleep (1)
-            casu.set_diagnostic_led_rgb (r = 1, g = 1, b = 1)
+            um_casu.set_diagnostic_led_rgb (r = 1, g = 1, b = 1)
             time.sleep (1)
-        casu.set_diagnostic_led_rgb (r = 0, g = 0, b = 0)
+        um_casu.set_diagnostic_led_rgb (r = 0, g = 0, b = 0)
         print "   Testing vibration..."
         for i in xrange (9):
-            casu.set_speaker_vibration (freq = 440, intens = 100)
+            um_casu.set_speaker_vibration (freq = 440, intens = 100)
             time.sleep (0.9)
-            casu.speaker_standby ()
+            um_casu.speaker_standby ()
             time.sleep (0.1)
         print "   Testing air pump..."
-        casu.set_airflow_intensity (1)
+        um_casu.set_airflow_intensity (1)
         time.sleep (9)
-        casu.airflow_standby ()
+        um_casu.airflow_standby ()
         print "   Checking temperature..."
         for i in xrange (9):
-            if casu.get_temp () > CASU_TEMPERATURE + 1:
-                print "      temperature is %f" % casu.get_temp ()
+            if um_casu.get_temp (assisipy.casu.TEMP_WAX) > CASU_TEMPERATURE + 1:
+                print "      temperature is %f" % casu.get_temp (assisipy.casu.TEMP_WAX)
             time.sleep (1)
     raw_input ("Press ENTER to continue ")
 

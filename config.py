@@ -35,8 +35,9 @@ class Config:
             self.population_size                           = dictionary ['population_size']
             self.number_evaluations_per_chromosome         = dictionary ['number_evaluations_per_chromosome']
             """How many experimental runs are made per chromosome evaluation"""
-            self.active_casu_rtc_file_name                 = dictionary ['active_casu_rtc_file_name']
-            self.passive_casu_rtc_file_name                = dictionary ['passive_casu_rtc_file_name']
+            self.casus_rtc_file_names = [
+                dictionary ['casu_0_rtc_file_name'],
+                dictionary ['casu_1_rtc_file_name']]
             self.stopped_threshold                         = dictionary ['stopped_threshold']
             self.aggregation_minDuration_thresh            = dictionary ['aggregation_minDuration_thresh']
             self.fitness_function                          = dictionary ['fitness_function']
@@ -55,6 +56,8 @@ class Config:
             self.arena_image = image.StadiumArenaImage ()
         elif self.arena_type == 'circular':
             self.arena_image = image.CircularArenaImage ()
+        elif self.arena_type == 'StadiumBorderArenaImage':
+            self.arena_image = image.StadiumBorderArenaImage ()
 
         self.image_width = 600
         self.image_height = 600
@@ -94,15 +97,15 @@ generations:
 number_of_evaluations_per_episode: %d
 evaluation_runtime: %d
 spreading_waitingtime: %d
-idle_time: %d
 population_size: %d
 number_evaluations_per_chromosome: %d
-active_casu_rtc_file_name : %s
-passive_casu_rtc_file_name : %s
+casu_0 : %s
+casu_1 : %s
 stopped_threshold : %d
 aggregation_minDuration_thresh : %d
 fitness_function : %s
 constant_airflow : %s
+arena : %s
 """ % (self.number_of_bees,
        self.generations_with_chromosome_frequency,
        self.generations_with_chromosome_freq_inten,
@@ -113,16 +116,15 @@ constant_airflow : %s
        self.number_of_evaluations_per_episode,
        self.evaluation_runtime,
        self.spreading_waitingtime,
-       self.idle_time,
        self.population_size,
        self.number_evaluations_per_chromosome,
-       self.active_casu_rtc_file_name,
-       self.passive_casu_rtc_file_name,
+       self.casus_rtc_file_names [0],
+       self.casus_rtc_file_names [1],
        self.stopped_threshold,
        self.aggregation_minDuration_thresh,
        self.fitness_function,
-       self.arena_type,
-       self.constant_airflow)
+       self.constant_airflow,
+       self.arena_type)
 
 if __name__ == '__main__':
     print "Debugging config.py"

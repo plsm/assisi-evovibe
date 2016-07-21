@@ -15,11 +15,11 @@ class AnES:
 config_filename = sys.argv [1]
 cfg = config.Config (config_filename)
 experiment.create_directories (cfg)
-(active_casu, passive_casu) = experiment.connect_casu (cfg)
+experiment.connect_casu (cfg)
 epsd = episode.Episode (cfg)
 experiment.initialize_files (cfg)
 counter = incremental_evolution.IncrementalEvolution.Counter ()
-eva = evaluator.Evaluator (cfg, active_casu, passive_casu, counter, AnES (), epsd)
+eva = evaluator.Evaluator (cfg, counter, AnES (), epsd)
 eva.run_vibration_model = chromosome.GP_F440.run_vibration_model
 population = [[0.1]]
 epsd.initialise ()
