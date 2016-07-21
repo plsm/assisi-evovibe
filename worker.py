@@ -21,28 +21,56 @@ WORKER_OK              = 1000
 CASU_TEMPERATURE = 28
 
 
+VIBRATION_FREQUENCY = 440
+VIBRATION_TIME = 1.0
+VIBRATION_INTENSITY = 50
+
+
+def run_vibration_pattern (chromosome, casu, evaluation_runtime):
+    """
+    Run the vibration model represented by the given SinglePulseGenePause chromosome.
+    """
+    pause_time = chromosome [0]
+    vibe_periods = [int (VIBRATION_TIME * 1000),       int (pause_time * 1000)]
+    vibe_freqs   = [VIBRATION_FREQUENCY,  1]
+    vibe_amps    = [VIBRATION_INTENSITY,  0]
+    
+    #casu1.set_vibration_pattern([int(vibtimeA*1000),int(pausetimeA*1000)],[frequencyA,1],[intensityA,0])
+    
+    
+    casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
+    time.sleep (evaluation_runtime)
+    casu.speaker_standby ()
+
 def active_casu ():
+    print ("Active CASU...")
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
-    chromosome.SinglePulseGenePause.run_vibration_pattern (message [1], a_casu, evaluation_run_time)
+    run_vibration_pattern (message [1], a_casu, evaluation_run_time)
     a_casu.speaker_standby ()
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
+    print ("Spreading...")
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
+    print ("Done!")
+    
 
 def passive_casu ():
+    print ("Passive CASU...")
     time.sleep (2.0 / frame_per_second)
     time.sleep (evaluation_run_time)
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
+    print ("Spreading...")
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
+    print ("Done!")
 
 def signal_handler (signal, frame):
     print ('You pressed Ctrl+C!')
@@ -91,6 +119,7 @@ if __name__ == '__main__':
         spreading_waiting_time = message [2]
         frame_per_second = message [3]
         zmq_sock_utils.send (socket, [WORKER_OK])
+        
 
     # prepare the CASU (turn the IR sensor off to make the background image)
     a_casu.set_temp (CASU_TEMPERATURE)
@@ -98,6 +127,10 @@ if __name__ == '__main__':
     a_casu.airflow_standby ()
     a_casu.ir_standby ()
     a_casu.speaker_standby ()
+    
+    #print ("Test vibration pattern")
+    #message = [1,[0.5]]
+    #active_casu ()
 
     # install signal handler to exit worker gracefully
     signal.signal (signal.SIGINT, signal_handler)
@@ -115,9 +148,5 @@ if __name__ == '__main__':
         elif command == CASU_STATUS:
             print (a_casu.get_temp (casu.ARRAY))
             zmq_sock_utils.send (socket, a_casu.get_temp (casu.TEMP_WAX))
-        elif command == RUN_VIBRATION_PATTERN:
-            pass
-        elif command == SPREAD_BEES:
-            pass
         else:
             print ("Unknown command:\n%s" % (str (message)))

@@ -9,6 +9,8 @@ import assisipy
 import zmq
 import yaml
 import subprocess
+import random
+import time
 
 def load_worker_settings ():
     """
@@ -115,7 +117,7 @@ class AbstractArena:
                 zmq_sock_utils.send (socket, [worker.ACTIVE_CASU, chromosome])
             else:
                 zmq_sock_utils.send (socket, [worker.PASSIVE_CASU])
-        time.sleep (4.0 / config.frame_per_second + config.evaluation_run_time + config.spreading_time)
+        time.sleep (4.0 / config.frame_per_second + config.evaluation_run_time + config.spreading_waiting_time)
 
     def x__write_properties (self, fp):
         fp.write ("""arena_left : %d
@@ -218,7 +220,7 @@ class StadiumBorderArena (AbstractArena):
         """
         Compare the background image with the ith image from an iteration video.
         """
-        pass
+        return [-1, -1, -1, -1]
 
 def run_convert (args):
     """Run the convert program with the given arguments.

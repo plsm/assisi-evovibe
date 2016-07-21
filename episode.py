@@ -37,11 +37,13 @@ class Episode:
 
         * ask the user to put bees in the arena(s);
         """
-        self.__episode_path = "%sepisodes/%03d/" % (self.config.experiment_folder, self.episode_index)
+        self.x_episode_path = "%sepisodes/%03d/" % (self.config.experiment_folder, self.episode_index)
         try:
-            os.makedirs (self.__episode_path)
+            os.makedirs (self.x_episode_path)
         except OSError:
             pass
+        print (self.x_episode_path)
+        raw_input ('Press ENTER')
         self.make_background_image ()
         self.ask_arenas ()
         raw_input ('\nPlace %d bees in the arena(s) and press ENTER' % self.config.number_bees)
@@ -70,7 +72,7 @@ class Episode:
         disturb the arena.  The bee aggregation is sensitive to changes between the background image and evaluation images.
         """
         print "\n\n* ** Creating background image..."
-        filename = self.__episode_path + 'Background.avi'
+        filename = self.x_episode_path + 'Background.avi'
         bashCommand = 'gst-launch-0.10 --gst-plugin-path=/usr/local/lib/gstreamer-0.10/ --gst-plugin-load=libgstaravis-0.4.so -v aravissrc num-buffers=1 ' + \
                       '! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
                       ' ! jpegenc ! avimux name=mux ! filesink location=' + filename    # with time - everytime generate a new file
@@ -79,7 +81,7 @@ class Episode:
         bashCommandSplit = "ffmpeg" + \
             " -i " + filename + \
             " -r 0.1" + \
-            " -f image2 " + self.__episode_path + "Background.jpg" #definition to extract the single image for background from the video
+            " -f image2 " + self.x_episode_path + "Background.jpg" #definition to extract the single image for background from the video
         p = subprocess.Popen (bashCommandSplit, shell = True, executable = '/bin/bash') #run the script of the extracting
         p.wait ()
         print ("background image is ready")
@@ -90,20 +92,20 @@ class Episode:
         """
         p = subprocess.Popen ([
             '/usr/bin/gimp',
-            self.__episode_path + "Background.jpg"])
+            self.x_episode_path + "Background.jpg"])
         go = True
         self.arenas = []
         index = 1
         while go:
-            img_path = "%sarena-%d/" % (self.__episode_path, index)
+            img_path = "%sarena-%d/" % (self.x_episode_path, index)
             if self.config.arena_type == 'StadiumBorderArena':
                 new_arena = arena.StadiumBorderArena (self.worker_zmqs, img_path)
             else:
                 print ("Unknown arena type: %s" % (str (self.config.arena_type)))
             self.arenas.append (new_arena)
             os.makedirs (img_path)
-            new_arena.create_region_of_interests_image (self.__episode_path)
-            new_arena.create_mask_images_casu_images (self.config, self.__episode_path)
+            new_arena.create_region_of_interests_image (self.x_episode_path)
+            new_arena.create_mask_images_casu_images (self.config, self.x_episode_path)
             new_arena.write_properties ()
             index += 1
             go = raw_input ('Are there more arena(s) (y/n)? ').upper () [0] == 'Y'

@@ -68,7 +68,7 @@ class Evaluator:
         picked_arena = self.episode.select_arena ()
         (recording_process, filename_real) = self.start_iteration_video ()
         print "         Starting vibration model: " + str (candidate) + "..."
-        picked_arena.run_vibration_model (self.config, candidate)
+        picked_arena.run_vibration_pattern (self.config, candidate)
         print "         Vibration model finished!"
         ########################### check code at this point
         recording_process.wait ()
@@ -120,7 +120,7 @@ class Evaluator:
         """
         print "\n\n* ** Starting Iteration Video..."
         num_buffers = (self.config.evaluation_run_time + self.config.spreading_waiting_time) * self.config.frame_per_second
-        filename_real = self.episode.__episode_path + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
+        filename_real = self.episode.x_episode_path + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
         bashCommand_video = 'gst-launch-0.10' + \
                             ' --gst-plugin-path=/usr/local/lib/gstreamer-0.10/' + \
                             ' --gst-plugin-load=libgstaravis-0.4.so' + \
@@ -162,7 +162,7 @@ class Evaluator:
         f.writerow (["background_active", "previous_iteration_active", "background_passive", "previous_iteration_passive"])
         n = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
         for i in range (1, n + 1):
-            f.write_row (picked_arena.compare_images (i))
+            f.writerow (picked_arena.compare_images (i))
         fp.close ()
 
 
