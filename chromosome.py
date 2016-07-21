@@ -18,6 +18,18 @@ class AbstractChromosome:
     """
     pass
 
+class NewModel (AbstractChromosome):
+    """
+    All chromosomes used by the incremental evolution algorithm must have the following set of static methods:
+    """
+    def run_vibration_model (chromosome, casu, evaluation_runtime)
+        parameterA = chromosome [0]
+        parameterB = chromosome [1]
+
+    def random_generator (random, args)
+        return [parameterA, parameterB]
+        pass
+
 class GF_SCAI (AbstractChromosome):
     """
     This chromosome contains a single gene that represents the vibration frequency.  The vibration intensity is determined by a static class attribute.
@@ -87,7 +99,7 @@ class GFPD_SCAI (AbstractChromosome):
         while time.time () - zero_time < evaluation_runtime:
             casu.set_speaker_vibration (freq = frequency, intens = GF_SCAI.INTENSITY)
             time.sleep (vibration_time)
-            casu.speaker_standby ()
+            casu.set_speaker_vibration (freq = 0, intens = 0)
             time.sleep (pause_time)
         print ("vibration stops")
 
@@ -137,7 +149,7 @@ class GP_F450 (AbstractChromosome):
             casu.set_speaker_vibration (freq = frequency, intens = GF_SCAI.INTENSITY)
             time.sleep (vibration_time)
             if pause_time > 0:
-                casu.speaker_standby ()
+                casu.set_speaker_vibration (freq = 0, intens = 0)
                 time.sleep (pause_time)
         print ("vibration stops")
 
@@ -174,7 +186,7 @@ class GP_F440 (AbstractChromosome):
             casu.set_speaker_vibration (freq = frequency, intens = GF_SCAI.INTENSITY)
             time.sleep (vibration_time)
             if pause_time > 0:
-                casu.speaker_standby ()
+                casu.set_speaker_vibration (freq = 0, intens = 0)
                 time.sleep (pause_time)
         print ("vibration stops")
 
@@ -297,7 +309,7 @@ class NatureDraftChromosome (AbstractChromosome):
         while time.time () - zero_time < evaluation_runtime:
             casu.set_speaker_vibration (freq = frequency, intens = intensity)
             time.sleep (duration_pulses)
-            casu.speaker_standby ()
+            casu.set_speaker_vibration (freq = 0, intens = 0)
             time.sleep (duration_pauses)
             state += 1
             if state == number_pulses:

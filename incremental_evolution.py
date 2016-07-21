@@ -43,26 +43,64 @@ class IncrementalEvolution:
         """Reads a CSV file with population"""
         pass
 
-    # def connect_casu (self):
-    #     """
-    #     Create the CASU instances that are going to be used by the chromosome evaluation functions.
-    #     Initialise the CASUs so that we can create the background image.
-    #     """
-    #     self.casu1 = casu.Casu (
-    #         rtc_file_name = self.config.active_casu_rtc_file_name,
-    #         log = True,
-    #         log_folder = "logs")
-    #     self.casu2 = casu.Casu (
-    #         rtc_file_name = self.config.passive_casu_rtc_file_name,
-    #         log = True,
-    #         log_folder = "logs")
-    #     for a_casu in [self.casu1, self.casu2]:
-    #         a_casu.diagnostic_led_standby () # turn the top led off
-    #         a_casu.set_speaker_vibration (freq = 0, intens = 0)
-    #         a_casu.set_diagnostic_led_rgb (r = 0, g = 0, b = 0)
-    #         a_casu.ir_standby ()             # turn the IR sensor off to make the background image
-    #         a_casu.set_temp (28)
-    #         a_casu.airflow_standby ()
+    def exp_init (self):
+        """Initialize the experimental setup.  Check folder existance, connect to CASU."""
+        #check if the experimentlog and repository folders are created by the user
+        if not os.path.isdir (self.config.experimentpath):
+            print "Experiment log folder does not exists: " + self.config.experimentpath
+            exit (1)
+        if not os.path.isdir (self.config.repositorypath):
+            print "Repository folder does not exist: " + self.config.repositorypath
+            exit (2)
+
+        self.iteration_zero = -1    #to know if it is the first attiration at the beggeining allocate to -1
+        while self.iteration_zero == -1: #it does not know yet
+            isInitial = raw_input('\nis this an initial iteration (Y/N)? ')
+            if isInitial=='y' or isInitial=='Y':
+                self.iteration_zero = True
+            elif isInitial=='n' or isInitial=='N':
+                self.iteration_zero = False
+            else:
+                self.iteration_zero = -1
+
+        dirs = os.listdir( self.config.experimentpath )  #looks for the folder and makes a list of the files in the folder
+        if self.iteration_zero:    # this to make sure that the files are not overwritten
+            for a in dirs:
+                filename_base = "configdata"
+                ind = a.find(filename_base)
+                if ind>-1:
+                    print("There is already a logdata in this folder")
+                    exit()
+            #self.iteration_num = 0 #first iteration start new experement
+        #else:    # read settings from files and proceed if not itration 0...
+            #self.loadDataFromFile()
+            #self.iteration_num += 1
+
+        #raw_input('\nPlease switch off the CASUs (to make the background image for the image processing software) and then enter when ready')
+        
+        self.connect_casu ()
+        self.episode.initialise ()
+
+    def connect_casu (self):
+        """
+        Create the CASU instances that are going to be used by the chromosome evaluation functions.
+        Initialise the CASUs so that we can create the background image.
+        """
+        self.casu1 = casu.Casu (
+            rtc_file_name = self.config.active_casu_rtc_file_name,
+            log = True,
+            log_folder = "logs")
+        self.casu2 = casu.Casu (
+            rtc_file_name = self.config.passive_casu_rtc_file_name,
+            log = True,
+            log_folder = "logs")
+        for a_casu in [self.casu1, self.casu2]:
+            a_casu.diagnostic_led_standby () # turn the top led off
+            a_casu.set_speaker_vibration (freq = 0, intens = 0)
+            a_casu.set_diagnostic_led_rgb (r = 0, g = 0, b = 0)
+            a_casu.ir_standby ()             # turn the IR sensor off to make the background image
+            a_casu.set_temp (28)
+            a_casu.airflow_standby ()
 
     def random_evaluator (self, candidates, args):
         """
@@ -137,8 +175,7 @@ class IncrementalEvolution:
 
     def main (self):
         #print self.config
-        (self.casu1, self.casu2) = experiment.connect_casu (self.config)
-        #self.connect_casu ()
+        self.connect_casu ()
         eva = evaluator.Evaluator (self.config, self.casu1, self.casu2, self.counter, self.es, self.episode)
         the_evaluator = eva.population_evaluator
         # the steps of the incremental evolution algorithm
