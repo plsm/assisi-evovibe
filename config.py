@@ -76,7 +76,7 @@ class Config:
         print ("----------------------------------------------------------------")
         print (self, end='')
         print ("----------------------------------------------------------------")
-        raw_input ('Press ENTER to continue')
+        raw_input ('Press ENTER to continue. ')
 
     def __str__ (self):
         return """number_bees : %d
@@ -88,9 +88,9 @@ population_size: %d
 number_evaluations_per_chromosome: %d
 stopped_threshold : %d
 aggregation_minDuration_thresh : %d
-fitness_function : %s
-constant_airflow : %s
-arena_type : %s
+fitness_function : '%s'
+constant_airflow : '%s'
+arena_type : '%s'
 frame_per_second : %d
 image :
     width : %d

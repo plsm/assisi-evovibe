@@ -16,7 +16,7 @@ class Episode:
 
     In the initialisation phase the characteristics of the arena image have to be computed before bees are placed in the arena.  Then we ask the user to place the bees in the arena.  For documentation about the arena images, see module 'image'.
 
-    In the finish phase we ask the user to remove the bees from the arena.  Files that were produced during an episode are moved to the experiment repository.
+    In the finish phase we ask the user to remove the bees from the arena.
 
     This class can be used by the incremental evolution or by a parameter sweep.
     """
@@ -37,16 +37,14 @@ class Episode:
 
         * ask the user to put bees in the arena(s);
         """
-        self.x_episode_path = "%sepisodes/%03d/" % (self.config.experiment_folder, self.episode_index)
+        self.current_path = "%sepisodes/%03d/" % (self.config.experiment_folder, self.episode_index)
         try:
-            os.makedirs (self.x_episode_path)
+            os.makedirs (self.current_path)
         except OSError:
             pass
-        print (self.x_episode_path)
-        raw_input ('Press ENTER')
         self.make_background_image ()
         self.ask_arenas ()
-        raw_input ('\nPlace %d bees in the arena(s) and press ENTER' % self.config.number_bees)
+        raw_input ('\nPlace %d bees in the arena(s) and press ENTER. ' % self.config.number_bees)
 
     def increment_evaluation_counter (self):
         """
@@ -57,7 +55,7 @@ class Episode:
             self.finish ()
             self.episode_index += 1
             self.initialise ()
-            self.current_evaluation_in_episode = 0
+            self.current_evaluation_in_episode = 1
         else:
             self.current_evaluation_in_episode += 1
 
@@ -72,7 +70,7 @@ class Episode:
         disturb the arena.  The bee aggregation is sensitive to changes between the background image and evaluation images.
         """
         print "\n\n* ** Creating background image..."
-        filename = self.x_episode_path + 'Background.avi'
+        filename = self.current_path + 'Background.avi'
         bashCommand = 'gst-launch-0.10 --gst-plugin-path=/usr/local/lib/gstreamer-0.10/ --gst-plugin-load=libgstaravis-0.4.so -v aravissrc num-buffers=1 ' + \
                       '! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
                       ' ! jpegenc ! avimux name=mux ! filesink location=' + filename    # with time - everytime generate a new file
@@ -81,7 +79,7 @@ class Episode:
         bashCommandSplit = "ffmpeg" + \
             " -i " + filename + \
             " -r 0.1" + \
-            " -f image2 " + self.x_episode_path + "Background.jpg" #definition to extract the single image for background from the video
+            " -f image2 " + self.current_path + "Background.jpg" #definition to extract the single image for background from the video
         p = subprocess.Popen (bashCommandSplit, shell = True, executable = '/bin/bash') #run the script of the extracting
         p.wait ()
         print ("background image is ready")
@@ -92,20 +90,20 @@ class Episode:
         """
         p = subprocess.Popen ([
             '/usr/bin/gimp',
-            self.x_episode_path + "Background.jpg"])
+            self.current_path + "Background.jpg"])
         go = True
         self.arenas = []
         index = 1
         while go:
-            img_path = "%sarena-%d/" % (self.x_episode_path, index)
+            img_path = "%sarena-%d/" % (self.current_path, index)
             if self.config.arena_type == 'StadiumBorderArena':
-                new_arena = arena.StadiumBorderArena (self.worker_zmqs, img_path)
+                new_arena = arena.StadiumBorderArena (self.worker_zmqs, self.current_path, img_path, index)
             else:
                 print ("Unknown arena type: %s" % (str (self.config.arena_type)))
             self.arenas.append (new_arena)
             os.makedirs (img_path)
-            new_arena.create_region_of_interests_image (self.x_episode_path)
-            new_arena.create_mask_images_casu_images (self.config, self.x_episode_path)
+            new_arena.create_region_of_interests_image ()
+            new_arena.create_mask_images_casu_images (self.config)
             new_arena.write_properties ()
             index += 1
             go = raw_input ('Are there more arena(s) (y/n)? ').upper () [0] == 'Y'
@@ -128,7 +126,7 @@ class Episode:
                 print ("Temperature status: %s." % (str (temps)))
             if total_sum == 0:
                 print ("All arenas have a temperature above the minimum threshold!")
-                raw_input ("Press ENTER to try again.")
+                raw_input ("Press ENTER to try again. ")
             else:
                 ok = True
         x = total_sum * random.random ()
@@ -137,48 +135,14 @@ class Episode:
         while x >= status [picked]:
             x -= status [picked]
             picked += 1
-        print ("Picked arena #%d." % (picked))
+        print ("Picked arena #%d." % (picked + 1))
         return self.arenas [picked]
-        
-    
-    # def image_properties (self):
-    #     """
-    #     Ask the user the image properties.  This depend on the arena type that is being used.
-    #     """
-    #     gimp_command = "gimp " + self.config.experimentpath + "Images/Background.jpg"
-    #     subprocess.Popen (gimp_command, shell = True, executable = '/bin/bash')
-    #     self.config.arena_image.ask_image_properties ()
-    #     imgpath = self.config.experimentpath + "Images/"
-    #     self.config.arena_image.create_measure_area_image (imgpath)
-    #     print "Created measured area image"
         
     def finish (self):
         """
         In the finish phase of an episode we:
 
-        * terminate the episode recording process;
-
         * tell the user to remove the bees from the arena;
 
-        * essential files that were produced during an episode are moved to the experiment repository;
-
-        * unneeded files or files that can be recreated from the essential files are deleted.
         """
-        raw_input ("Remove the bees from the arena(s) and press ENTER to continue.")
-        
-    def remove_episode_files (self, last_finish):
-        """
-        Remove the files in the Images/ directory that were created in a bee evaluation episode.
-        """
-        print "\n\nDeleting episode files..."
-        imgpath_incomplete_1 = self.config.experimentpath + "Images/iterationimage_"
-        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
-        for evaluation_index in xrange (1, self.config.number_evaluations_per_episode + 1):
-            imgpath_incomplete_2 = imgpath_incomplete_1 + str (evaluation_index) + "_"
-            for i in xrange (1, n + 1):
-                try:
-                    os.remove (imgpath_incomplete_2 + "{:04d}.jpg".format (i))
-                except OSError:
-                    if not last_finish:
-                        print ("Not found: " + imgpath_incomplete_2 + "{:04d}.jpg".format (i))
-        print "Episode files deleted!"
+        raw_input ("Remove the bees from the arena(s) and press ENTER to continue. ")

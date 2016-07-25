@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import chromosome
 import zmq_sock_utils
 
 from assisipy import casu
@@ -10,44 +11,39 @@ import sys
 import zmq
 import signal
 
-INITIALIZE             = 1
+INITIALISE             = 1
 ACTIVE_CASU            = 5
 PASSIVE_CASU           = 6
-#RUN_VIBRATION_PATTERN  = 2
-#SPREAD_BEES            = 3
 CASU_STATUS            = 4
 WORKER_OK              = 1000
 
 CASU_TEMPERATURE = 28
 
+evaluation_run_time = None
+spreading_waiting_time = None
+frame_per_second = None
 
-VIBRATION_FREQUENCY = 440
-VIBRATION_TIME = 1.0
-VIBRATION_INTENSITY = 50
+def cmd_initialise ():
+    global evaluation_run_time
+    global spreading_waiting_time
+    global frame_per_second
+    if len (message) != 4:
+        print ("Invalid initialisation message!\n" + str (message))
+        a_casu.stop ()
+        sys.exit (3)
+    else:
+        print ("Initialisation message...")
+        evaluation_run_time = message [1]
+        spreading_waiting_time = message [2]
+        frame_per_second = message [3]
+        zmq_sock_utils.send (socket, [WORKER_OK])
 
-
-def run_vibration_pattern (chromosome, casu, evaluation_runtime):
-    """
-    Run the vibration model represented by the given SinglePulseGenePause chromosome.
-    """
-    pause_time = chromosome [0]
-    vibe_periods = [int (VIBRATION_TIME * 1000),       int (pause_time * 1000)]
-    vibe_freqs   = [VIBRATION_FREQUENCY,  1]
-    vibe_amps    = [VIBRATION_INTENSITY,  0]
-    
-    #casu1.set_vibration_pattern([int(vibtimeA*1000),int(pausetimeA*1000)],[frequencyA,1],[intensityA,0])
-    
-    
-    casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
-    time.sleep (evaluation_runtime)
-    casu.speaker_standby ()
-
-def active_casu ():
+def cmd_active_casu ():
     print ("Active CASU...")
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
-    run_vibration_pattern (message [1], a_casu, evaluation_run_time)
+    chromosome.SinglePulseGenePause.run_vibration_model (message [1], a_casu, evaluation_run_time)
     a_casu.speaker_standby ()
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
@@ -57,9 +53,10 @@ def active_casu ():
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
     print ("Done!")
+    zmq_sock_utils.send (socket, [WORKER_OK])
     
 
-def passive_casu ():
+def cmd_passive_casu ():
     print ("Passive CASU...")
     time.sleep (2.0 / frame_per_second)
     time.sleep (evaluation_run_time)
@@ -71,6 +68,7 @@ def passive_casu ():
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
     print ("Done!")
+    zmq_sock_utils.send (socket, [WORKER_OK])
 
 def signal_handler (signal, frame):
     print ('You pressed Ctrl+C!')
@@ -107,20 +105,6 @@ if __name__ == '__main__':
     socket = context.socket (zmq.REP)
     socket.bind (zmq_address)
 
-    # wait for initialisation message
-    print ("Waiting for initialisation message...")
-    message = zmq_sock_utils.recv (socket)
-    if message [0] != INITIALIZE or len (message) != 4:
-        print ("Invalid initialisation message!\n" + str (message))
-        a_casu.stop ()
-        sys.exit (3)
-    else:
-        evaluation_run_time = message [1]
-        spreading_waiting_time = message [2]
-        frame_per_second = message [3]
-        zmq_sock_utils.send (socket, [WORKER_OK])
-        
-
     # prepare the CASU (turn the IR sensor off to make the background image)
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.diagnostic_led_standby ()
@@ -128,10 +112,6 @@ if __name__ == '__main__':
     a_casu.ir_standby ()
     a_casu.speaker_standby ()
     
-    #print ("Test vibration pattern")
-    #message = [1,[0.5]]
-    #active_casu ()
-
     # install signal handler to exit worker gracefully
     signal.signal (signal.SIGINT, signal_handler)
 
@@ -141,10 +121,12 @@ if __name__ == '__main__':
         message = zmq_sock_utils.recv (socket)
         print ("Received request: %s" % str (message))
         command = message [0]
-        if command == ACTIVE_CASU:
-            active_casu ()
+        if command == INITIALISE:
+            cmd_initialise ()
+        elif command == ACTIVE_CASU:
+            cmd_active_casu ()
         elif command == PASSIVE_CASU:
-            passive_casu ()
+            cmd_passive_casu ()
         elif command == CASU_STATUS:
             print (a_casu.get_temp (casu.ARRAY))
             zmq_sock_utils.send (socket, a_casu.get_temp (casu.TEMP_WAX))

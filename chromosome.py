@@ -8,8 +8,6 @@
 
 from assisipy import casu
 
-from inspyred import ec
-
 import random
 import time
 
@@ -39,9 +37,9 @@ class SinglePulseGenePause (AbstractChromosome):
         Run the vibration model represented by the given SinglePulseGenePause chromosome.
         """
         pause_time = chromosome [0]
-        vibe_periods = [SinglePulseGenePause.VIBRATION_TIME,       pause_time]
-        vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY,  0]
-        vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY,  0]
+        vibe_periods = [int (1000 * SinglePulseGenePause.VIBRATION_TIME), int (1000 * pause_time)]
+        vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY,         1]
+        vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY,         0]
         casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
         time.sleep (evaluation_runtime)
         casu.speaker_standby ()
@@ -55,11 +53,12 @@ class SinglePulseGenePause (AbstractChromosome):
         pause_time = random.uniform (SinglePulseGenePause.MIN_TIME, SinglePulseGenePause.MAX_TIME)
         return [pause_time]
 
-    bounder = ec.Bounder (MIN_TIME, MAX_TIME)
+
+    @staticmethod
+    def get_bounder ():
+        from inspyred import ec
+        return ec.Bounder (SinglePulseGenePause.MIN_TIME, SinglePulseGenePause.MAX_TIME)
 
 if __name__ == '__main__':
     pass
-
-vibration_models = {}
-vibration_models ['single_pulse_gene_pause'] = (SinglePulseGenePause.random_generator, SinglePulseGenePause.bounder, SinglePulseGenePause.run_vibration_model)
 

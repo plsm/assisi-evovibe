@@ -37,7 +37,7 @@ def calculate_experiment_folder_for_new_run (config):
     run_number = 1
     while True:
         result = 'run-%03d/' % (run_number)
-        if not os.path.isdir (result) and not os.path.exists (result):
+        if True or not os.path.isdir (result) and not os.path.exists (result):
             config.experiment_folder = result
             return
         run_number += 1
@@ -47,6 +47,7 @@ def create_directories_for_experimental_run (config):
     Create the directories for an experimental run.
     """
     for path in [
+            "tmp/",
             config.experiment_folder,
             config.experiment_folder + "logs/",
             config.experiment_folder + "episodes/"]:
@@ -61,12 +62,12 @@ def create_experimental_run_files (config):
     """
     with open (config.experiment_folder + "population.csv", 'w') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-        row = ["generation", "episode", "fitness", "chromosome_genes"]
+        row = ["generation", "episode", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
     with open (config.experiment_folder + "evaluation.csv", 'w') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-        row = ["generation", "episode", "arena", "value", "chromosome_genes"]
+        row = ["generation", "episode", "selected_arena", "active_casu", "value", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
 
@@ -82,7 +83,7 @@ def run_evolutionary_strategy_algorithm (config, worker_zmqs):
         generator = chromosome.SinglePulseGenePause.random_generator,
         evaluator = evltr.population_evaluator,
         pop_size = config.population_size,
-        bounder = chromosome.SinglePulseGenePause.bounder,
+        bounder = chromosome.SinglePulseGenePause.get_bounder (),
         maximize = True,
         max_generations = config.number_generations)
     epsd.finish ()

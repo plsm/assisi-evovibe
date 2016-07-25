@@ -33,30 +33,44 @@ class Evaluator:
         self.es = es
         self.episode = episode
         self.counter = counter
+        self.number_analysed_frames = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
 
     def population_evaluator (self, population, args = None):
         """
         Evaluate a population.  This is main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
         """
-        population_fitnesses = []
-        for chromosome in population:
-            population_fitnesses.append (self.chromosome_fitness (chromosome))
-        return population_fitnesses
+        with open (self.config.experiment_folder + "population.csv", 'a') as fp:
+            f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
+            for chromosome in population:
+                row = [
+                    self.es.num_generations + self.counter.base_generation,
+                    self.episode.episode_index,
+                    ] + chromosome
+                f.writerow (row)
+            fp.close ()
+        return [self.chromosome_fitness (chromosome) for chromosome in population]
+#        population_fitnesses = []
+#        for chromosome in population:
+#            population_fitnesses.append (self.chromosome_fitness (chromosome))
+#        return population_fitnesses
 
     def chromosome_fitness (self, chromosome):
         """
         Compute the fitness of chromosome.  This is the value that is going to be
         used by the evolutionary algorithm in the inspyred package.
         """
-        result = 0.0
-        fits = []
-        for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
-            f = self.iteration_step (chromosome, index_evaluation)
-            result += f
-            fits.append (f)
-        self.log_chromosome (chromosome, fits)
-        result = result / self.config.number_evaluations_per_chromosome
-        return result
+        values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
+        return sum (values) / self.config.number_evaluations_per_chromosome
+        # result = 0.0
+        # fits = []
+        # for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
+        #     f = self.iteration_step (chromosome, index_evaluation)
+        #     result += f
+        #     fits.append (f)
+        # result = result / self.config.number_evaluations_per_chromosome
+        # self.write_fitness (chromosome, result)
+        # ########################### check code at this point
+        # return result
 
         
     def iteration_step (self, candidate, index_evaluation):
@@ -64,53 +78,21 @@ class Evaluator:
         Experimental step where a candidate chromosome evaluation is done.
         """
         self.episode.increment_evaluation_counter ()
-        print "Episode %d - Evaluation  %d" % (self.episode.episode_index, self.episode.current_evaluation_in_episode)
+        print "\n\nEpisode %d - Evaluation  %d" % (self.episode.episode_index, self.episode.current_evaluation_in_episode)
         picked_arena = self.episode.select_arena ()
         (recording_process, filename_real) = self.start_iteration_video ()
         print "         Starting vibration model: " + str (candidate) + "..."
-        picked_arena.run_vibration_pattern (self.config, candidate)
+        picked_arena.run_vibration_model (self.config, candidate)
         print "         Vibration model finished!"
-        ########################### check code at this point
         recording_process.wait ()
         print "Iteration video finished!"
         self.split_iteration_video (filename_real)
         self.compare_images (picked_arena)
-        evaluation_score = self.compute_fitness (imgpath, imgname_incomplete)
-        print ("\n\niteration " + str (self.episode.current_evaluation_in_episode)+" is finished\n")
+        evaluation_score = self.compute_evaluation (picked_arena)
+        self.write_evaluation (picked_arena, candidate, evaluation_score)
         print ("Evaluation of " + str (candidate) + " is " + str (evaluation_score))
-        raw_input ("Press ENTER to continue DEBUG")
+        #raw_input ("\nPress ENTER to continue DEBUG.\n")
         return evaluation_score
-
-    def check_prepare_casus (self):
-        """
-        Check and prepare the CASUs for a chromosome evaluation.
-        If one of the CASUs is above the set temperature (plus 1 degree) we ask the user to try to solve the problem.
-        """
-        CASU_TEMPERATURE = 28
-        for el_casu in experiment.los_casus:
-            not_ok = True
-            while not_ok:
-                casu_temp = el_casu.get_temp (assisipy.casu.TEMP_WAX)
-                if casu_temp > CASU_TEMPERATURE + 1:
-                    print "Casu %s temperature is %f.  Solve the problem or abort the program." % (el_casu.name (), casu_temp)
-                    raw_input ("Press ENTER when you are ready")
-                    el_casu.set_temp (CASU_TEMPERATURE)
-                    el_casu.speaker_standby ()
-                    el_casu.ir_standby ()
-                    el_casu.set_diagnostic_led_rgb (r = 1, g = 0, b = 0)
-                    time.sleep (1)
-                    el_casu.set_diagnostic_led_rgb (r = 0, g = 0, b = 0)
-                    for le_casu in experiment.los_casus:
-                        le_casu.set_airflow_intensity (1)
-                    time.sleep (10)
-                    for le_casu in experiment.los_casus:
-                        le_casu.airflow_standby ()
-                else:
-                    not_ok = False
-        for ein_casu in experiment.los_casus:
-            ein_casu.set_temp (CASU_TEMPERATURE)
-            ein_casu.speaker_standby ()
-        self.used_casu_index = 1 - self.used_casu_index
                     
     def start_iteration_video (self):
         """
@@ -120,7 +102,7 @@ class Evaluator:
         """
         print "\n\n* ** Starting Iteration Video..."
         num_buffers = (self.config.evaluation_run_time + self.config.spreading_waiting_time) * self.config.frame_per_second
-        filename_real = self.episode.x_episode_path + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
+        filename_real = self.episode.current_path + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
         bashCommand_video = 'gst-launch-0.10' + \
                             ' --gst-plugin-path=/usr/local/lib/gstreamer-0.10/' + \
                             ' --gst-plugin-load=libgstaravis-0.4.so' + \
@@ -135,61 +117,54 @@ class Evaluator:
         Split the iteration video into images.  We only need the images from the evaluation run time period.
 
         The images are written in folder tmp relative to 
-
-        TODO:
-        See how to use the ffmpeg program to only split a part of a video.
         """
-        print "\n\n* ** Starting Image Split..."
+        print "\n\n* ** Starting Video Split..."
         bashCommandSplit = "ffmpeg" + \
                            " -i " + filename_real + \
                            " -r " + str (self.config.frame_per_second) + \
+                           " -frames " + str (self.number_analysed_frames) + \
                            " -f image2 tmp/iteration-image-%4d.jpg"
         p = subprocess.Popen (bashCommandSplit, shell=True, executable='/bin/bash') #to create and save the real images from the video depending on the iteration number
         p.wait ()
-        print ("iteration " + str (self.episode.current_evaluation_in_episode) + " video is splitted")
-        print "Image split finished!"
+        print ("Finished spliting iteration " + str (self.episode.current_evaluation_in_episode) + " video.")
         
     def compare_images (self, picked_arena):
         """
         Compare images created in a chromosome evaluation and generate a CSV file.
-        The first column has the pixel difference between the current iteration image and the background image in the active CASU.
-        The second column has the pixel difference between the current iteration image and the previous iteration image in the active CASU.
-        The third column has the pixel difference between the current iteration image and the background image in the passive CASU.
-        The fourth column has the pixel difference between the current iteration image and the previous iteration image in the passive CASU.
+        The first column has the pixel difference between the current iteration image and the background image in the first CASU.
+        The second column has the pixel difference between the current iteration image and the previous iteration image in the first CASU.
+        The third column has the pixel difference between the current iteration image and the background image in the second CASU.
+        The fourth column has the pixel difference between the current iteration image and the previous iteration image in the second CASU.
         """
+        print ("\n\n* ** Comparing Images...")
         fp = open ("tmp/image-processing.csv", 'w')
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-        f.writerow (["background_active", "previous_iteration_active", "background_passive", "previous_iteration_passive"])
-        n = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
-        for i in range (1, n + 1):
+        f.writerow (["background_A", "previous_iteration_A", "background_B", "previous_iteration_B"])
+        for i in xrange (1, self.number_analysed_frames + 1):
             f.writerow (picked_arena.compare_images (i))
         fp.close ()
+        print ("Finished comparing images from iteration " + str (self.episode.current_evaluation_in_episode) + " video.")
 
 
-    def compute_fitness (self, imgpath, imgname_incomplete):
+    def compute_evaluation (self, picked_arena):
+        """
+        Compute the evaluation of the current chromosome.  This depends on the fitness function property of the configuration file.
+        """
+        if self.config.fitness_function == 'stopped_frames':
+            return self.stopped_frames (picked_arena)
 
-        #self.fitness = self.averageBeeCountDifference(imgpath,imgname_incomplete)
-
-        if self.config.fitness_function == 'timeToAggregate':
-            time_to_agg = self.timeToAggregate ()
-            print ("time to aggregate:" + str (time_to_agg))
-            if time_to_agg > -1:
-                result = (self.config.evaluation_run_time - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_run_time)
-            else: # if time_to_agg == -1 it means the aggregation has never happend, so we set the fitness to zero
-                result = 0
-        elif self.config.fitness_function == 'timeToAggregate_andStay':
-            time_to_agg = self.timeToAggregate_andStay ()
-            print ("time to aggregate:" + str (time_to_agg))
-            if time_to_agg > -1:
-                result = (self.config.evaluation_run_time - (time_to_agg / self.config.frame_per_second)) / (1.0 * self.config.evaluation_run_time)
-            else: # if time_to_agg == -1 it means the aggregation has never happend, so we set the fitness to zero
-                result = 0
-        elif self.config.fitness_function == 'non_moving_pixels_bee_blobs':
-            result= self.fitness_non_moving_pixels_bee_blobs ()
-        else:
-            raise "Unknown fitness function: " + str (self.config.fitness_function)
-            
-        print ("fitness: " + str (result))
+    def stopped_frames (self, picked_arena):
+        """
+        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+        """
+        result = 0
+        with open ("tmp/image-processing.csv", 'r') as fp:
+            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next ()
+            for row in freader:
+                if row [picked_arena.selected_worker_index * 2] > 100 and row [picked_arena.selected_worker_index * 2 + 1] < 100:
+                    result += 1
+            fp.close ()
         return result
 
     def old_timeToAggregate (self, imgpath, imgname_incomplete):
@@ -277,17 +252,28 @@ class Evaluator:
                 result += self.config.stopped_threshold - dcount
         return result
 
-    def log_chromosome (self, chromosome, fitnesses):
+    def write_evaluation (self, picked_arena, candidate, evaluation_score):
+        with open (self.config.experiment_folder + "evaluation.csv", 'a') as fp:
+            f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            f.writerow ([
+                self.es.num_generations + self.counter.base_generation,
+                self.episode.episode_index,
+                picked_arena.index,
+                picked_arena.workers [picked_arena.selected_worker_index][0],  # active casu number
+                evaluation_score] + candidate)
+            fp.close ()
+    
+    def write_fitness (self, chromosome, fitness):
         """
         Save the result of a chromosome evaluation.
         """
-        # Print configurations
-#        with open (self.config.experimentpath + "populations/pop_" + str (self.config.num_generations) + ".csv", 'a') as fp:
-        with open (self.config.experimentpath + "populations/pop.csv", 'a') as fp:
+        with open (self.config.experiment_folder + "population.csv", 'a') as fp:
             f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
-            row = [self.es.num_generations + self.counter.base_generation]
-            row.extend (chromosome)
-            row.extend (fitnesses)
+            row = [
+                self.es.num_generations + self.counter.base_generation,
+                self.episode.episode_index,
+                fitness
+                ] + chromosome
             print (row)
             f.writerow (row)
             fp.close ()
