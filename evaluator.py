@@ -49,7 +49,7 @@ class Evaluator:
                 f.writerow (row)
             fp.close ()
         result = [self.chromosome_fitness (chromosome) for chromosome in population]
-        print ("Population fitness: " , result)
+        print ("Generation ", self.es.num_generations, "  Population fitness: " , result)
         return result
 #        population_fitnesses = []
 #        for chromosome in population:
@@ -139,7 +139,7 @@ class Evaluator:
         The fourth column has the pixel difference between the current iteration image and the previous iteration image in the second CASU.
         """
         print ("\n\n* ** Comparing Images...")
-        fp = open ("tmp/image-processing.csv", 'w')
+        fp = open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'w')
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         f.writerow (["background_A", "previous_iteration_A", "background_B", "previous_iteration_B"])
         for i in xrange (1, self.number_analysed_frames + 1):
@@ -160,13 +160,13 @@ class Evaluator:
         In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
         """
         result = 0
-        with open ("tmp/image-processing.csv", 'r') as fp:
+        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
             freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
             freader.next ()
             freader.next ()
             for row in freader:
                 if row [picked_arena.selected_worker_index * 2] > 100 and row [picked_arena.selected_worker_index * 2 + 1] < 100:
-                    result += 1
+                    result += row [picked_arena.selected_worker_index * 2]
             fp.close ()
         return result
 
