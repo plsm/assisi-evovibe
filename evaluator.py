@@ -48,7 +48,9 @@ class Evaluator:
                     ] + chromosome
                 f.writerow (row)
             fp.close ()
-        return [self.chromosome_fitness (chromosome) for chromosome in population]
+        result = [self.chromosome_fitness (chromosome) for chromosome in population]
+        print ("Population fitness: " , result)
+        return result
 #        population_fitnesses = []
 #        for chromosome in population:
 #            population_fitnesses.append (self.chromosome_fitness (chromosome))
@@ -160,6 +162,7 @@ class Evaluator:
         result = 0
         with open ("tmp/image-processing.csv", 'r') as fp:
             freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next ()
             freader.next ()
             for row in freader:
                 if row [picked_arena.selected_worker_index * 2] > 100 and row [picked_arena.selected_worker_index * 2 + 1] < 100:

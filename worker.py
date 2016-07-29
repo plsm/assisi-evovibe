@@ -37,6 +37,11 @@ def cmd_initialise ():
         spreading_waiting_time = message [2]
         frame_per_second = message [3]
         zmq_sock_utils.send (socket, [WORKER_OK])
+    a_casu.set_temp (CASU_TEMPERATURE)
+    a_casu.diagnostic_led_standby ()
+    a_casu.airflow_standby ()
+    a_casu.ir_standby ()
+    a_casu.speaker_standby ()
 
 def cmd_active_casu ():
     print ("Active CASU...")
@@ -69,6 +74,28 @@ def cmd_passive_casu ():
     a_casu.airflow_standby ()
     print ("Done!")
     zmq_sock_utils.send (socket, [WORKER_OK])
+    
+    
+def blip_casu ():
+    a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
+    time.sleep (2.0 / frame_per_second)
+    a_casu.diagnostic_led_standby ()
+    
+    
+def cmd_test_chromosome ():
+    vibration_run_time = x
+    number_repeats = x
+    for _ in xrange (number_repeats):
+        blip_casu ()
+        vibe_periods = [900,  100]
+        vibe_freqs   = [440,    1]
+        vibe_amps    = [ 50,    0]
+        el_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
+        time.sleep (vibration_run_time)
+        blip_casu ()
+        a_casu.speaker_standby ()
+        time.sleep (idle_runtime)
+
 
 def signal_handler (signal, frame):
     print ('You pressed Ctrl+C!')

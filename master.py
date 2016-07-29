@@ -37,7 +37,7 @@ def calculate_experiment_folder_for_new_run (config):
     run_number = 1
     while True:
         result = 'run-%03d/' % (run_number)
-        if True or not os.path.isdir (result) and not os.path.exists (result):
+        if not os.path.isdir (result) and not os.path.exists (result):
             config.experiment_folder = result
             return
         run_number += 1
