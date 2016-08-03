@@ -90,6 +90,7 @@ def run_evolutionary_strategy_algorithm (config, worker_zmqs):
     es = inspyred.ec.ES (random.Random ())
     evltr = evaluator.Evaluator (config, epsd)
     es.terminator = [inspyred.ec.terminators.generation_termination]
+    es.variator = [chromosome.SinglePulseGenePause.get_variator ()]
     es.evolve (
         generator = chromosome.SinglePulseGenePause.random_generator,
         evaluator = evltr.population_evaluator,
@@ -117,7 +118,8 @@ def load_population_and_evaluation (config):
         print (initial_population)
         current_generation = int (rows [-1][evaluator.POP_GENERATION])
         current_episode = int (rows [-1][evaluator.POP_EPISODE])
-        seeds = initial_population [-config.population_size:]
+        s = initial_population [-config.population_size:]
+        seeds = [[int(c[0])] for c in s]
         fp.close ()
     with open (config.experiment_folder + "evaluation.csv", "r") as fp:
         f = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
@@ -139,6 +141,7 @@ def continue_evolutionary_strategy_algorithm (config, worker_zmqs, current_gener
     es = inspyred.ec.ES (random.Random ())
     evltr = evaluator.Evaluator (config, epsd, current_generation, eva_values)
     es.terminator = [inspyred.ec.terminators.generation_termination]
+    es.variator = [chromosome.SinglePulseGenePause.get_variator ()]
     es.evolve (
         generator = chromosome.SinglePulseGenePause.random_generator,
         evaluator = evltr.population_evaluator,

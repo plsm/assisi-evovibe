@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import arena
+import worker
+import zmq_sock_utils
 
 import subprocess
 import os
@@ -45,6 +47,39 @@ class Episode:
         self.make_background_image ()
         self.ask_arenas ()
         raw_input ('\nPlace %d bees in the arena(s) and press ENTER. ' % self.config.number_bees)
+
+    def ask_user (self, chromosome):
+        """
+        Ask the user to evaluate the chromosome.  If bees are stopped because they are sleeping, the user may opt to spread them.
+        """
+        interact = self.current_evaluation_in_episode < self.config.number_evaluations_per_episode
+        while interact:
+            print "Press ENTER to evaluate chromosome " + str (chromosome)
+            print "Enter an integer x to spread bees for x seconds"
+            print "Enter 'replace bees' to end the current episode and start a new one with new bees"
+            ans = raw_input ("? ")
+            try:
+                seconds = int (ans)
+                print "Spreading bees for %d seconds..." % (seconds)
+                #self.episode.spread_bees (seconds)
+                for arena in self.arenas:
+                    for (_, socket) in arena.workers:
+                        zmq_sock_utils.send (socket, [worker.SPREAD_BEES, seconds])
+                for arena in self.arenas:
+                    for (number, socket) in arena.workers:
+                        answer = zmq_sock_utils.recv (socket)
+                        print ("Worker responsible for casu #%d responded with: %s" % (number, str (answer)))
+            except ValueError:
+                if ans == 'replace bees':
+                    self.finish ()
+                    self.episode_index += 1
+                    self.initialise ()
+                    self.current_evaluation_in_episode = 0
+                    interact = False
+                else:
+                    interact = ans != ''
+                    if interact:
+                        print "Invalid option:", ans
 
     def increment_evaluation_counter (self):
         """

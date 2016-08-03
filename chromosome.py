@@ -27,6 +27,7 @@ class SinglePulseGenePause (AbstractChromosome):
     MIN_PAUSE_PERIOD = 100 #assisipy.casu.VIBE_PERIOD_MIN
     MAX_PAUSE_PERIOD = 1000
     STEP_PAUSE_PERIOD = 10
+    STDDEV_PAUSE_PERIOD = 300
 
     VIBRATION_FREQUENCY = 440
     VIBRATION_PERIOD = 1000
@@ -60,6 +61,17 @@ class SinglePulseGenePause (AbstractChromosome):
         from inspyred import ec
         r = range (SinglePulseGenePause.MIN_PAUSE_PERIOD, SinglePulseGenePause.MAX_PAUSE_PERIOD + 1, SinglePulseGenePause.STEP_PAUSE_PERIOD)
         return ec.DiscreteBounder (r)
+
+    @staticmethod
+    def get_variator ():
+        import inspyred
+        @inspyred.ec.variators.mutator
+        def variator (random, candidate, args):
+            result = int (candidate [0] + random.gauss (0, SinglePulseGenePause.STDDEV_PAUSE_PERIOD))
+            result = result - (result % SinglePulseGenePause.STEP_PAUSE_PERIOD)
+            result =  max (SinglePulseGenePause.MIN_PAUSE_PERIOD, min (result, SinglePulseGenePause.MAX_PAUSE_PERIOD))
+            return [result, 0]
+        return variator
 
 if __name__ == '__main__':
     pass

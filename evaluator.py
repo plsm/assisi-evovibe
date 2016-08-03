@@ -65,18 +65,23 @@ class Evaluator:
         print ("Generation ", self.generation_number, "  Population fitness: " , result)
         self.generation_number += 1
         return result
-
+        
     def chromosome_fitness (self, chromosome):
         """
         Compute the fitness of chromosome.  This is the value that is going to be
         used by the evolutionary algorithm in the inspyred package.
         """
         if self.continue_values is None:
+            self.episode.ask_user (chromosome)
             values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
         else:
+            first = True
             values = []
             for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
                 if self.continue_values [0] is None:
+                    if first:
+                        first = False
+                        self.episode.ask_user (chromosome)
                     values.append (self.iteration_step (chromosome, index_evaluation))
                 else:
                     values.append (self.continue_values [0])
@@ -163,6 +168,8 @@ class Evaluator:
         """
         if self.config.fitness_function == 'stopped_frames':
             return self.stopped_frames (picked_arena)
+        elif self.config.fitness_function == 'penalize_passive_casu':
+            return self.penalize_passive_casu (picked_arena)
 
     def stopped_frames (self, picked_arena):
         """
@@ -176,6 +183,23 @@ class Evaluator:
             for row in freader:
                 if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
                     result += row [picked_arena.selected_worker_index * 2]
+            fp.close ()
+        return result
+
+    def penalize_passive_casu (self, picked_arena):
+        """
+        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+        """
+        result = 0
+        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next () # skip header row
+            freader.next () # skip data from frame with LED on
+            for row in freader:
+                if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                    result += row [picked_arena.selected_worker_index * 2]
+                if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.image_processing_pixel_count_background_threshold and row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                    result += -row [(1 - picked_arena.selected_worker_index) * 2]
             fp.close ()
         return result
 

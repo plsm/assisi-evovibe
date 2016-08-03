@@ -17,6 +17,7 @@ PASSIVE_CASU                 = 6
 CASU_STATUS                  = 4
 VIBRATION_PATTERN_440_09_01  = 7
 STANDBY_CASU                 = 8
+SPREAD_BEES                  = 10
 WORKER_OK              = 1000
 
 CASU_TEMPERATURE = 28
@@ -105,8 +106,18 @@ def cmd_standby_casu ():
     a_casu.speaker_standby ()
     zmq_sock_utils.send (socket, [WORKER_OK])
 
+def cmd_spread_bees ():
+    print ("Spreading bees...")
+    a_casu.set_temp (CASU_TEMPERATURE)
+    a_casu.set_airflow_intensity (1)
+    time.sleep (message [1])
+    a_casu.airflow_standby ()
+    print ("Done!")
+    zmq_sock_utils.send (socket, [WORKER_OK])
+
 def signal_handler (signal, frame):
     print ('You pressed Ctrl+C!')
+    a_casu.airflow_standby () # this is not done by casu.stop()
     a_casu.stop ()
     sys.exit (0)
 
@@ -168,5 +179,7 @@ if __name__ == '__main__':
             cmd_vibration_pattern_440_09_01 ()
         elif command == STANDBY_CASU:
             cmd_standby_casu ()
+        elif command == SPREAD_BEES:
+            cmd_spread_bees ()
         else:
             print ("Unknown command:\n%s" % (str (message)))
