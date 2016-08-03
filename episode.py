@@ -21,11 +21,11 @@ class Episode:
     This class can be used by the incremental evolution or by a parameter sweep.
     """
 
-    def __init__ (self, config, worker_zmqs):
+    def __init__ (self, config, worker_zmqs, episode_index = 1):
         self.config = config
         self.worker_zmqs = worker_zmqs
         self.current_evaluation_in_episode = 0
-        self.episode_index = 1
+        self.episode_index = episode_index
 
     def initialise (self):
         """
@@ -96,13 +96,19 @@ class Episode:
         index = 1
         while go:
             img_path = "%sarena-%d/" % (self.current_path, index)
-            if self.config.arena_type == 'StadiumBorderArena':
-                new_arena = arena.StadiumBorderArena (self.worker_zmqs, self.current_path, img_path, index)
-            else:
-                print ("Unknown arena type: %s" % (str (self.config.arena_type)))
-            self.arenas.append (new_arena)
             os.makedirs (img_path)
-            new_arena.create_region_of_interests_image ()
+            roi_ko = True
+            while roi_ko:
+                if self.config.arena_type == 'StadiumBorderArena':
+                    new_arena = arena.StadiumBorderArena (self.worker_zmqs, self.current_path, img_path, index)
+                else:
+                    print ("Unknown arena type: %s" % (str (self.config.arena_type)))
+                new_arena.create_region_of_interests_image ()
+                command = "display " + img_path + "Region-of-Interests.jpg"
+                display_process = subprocess.Popen (command, shell = True)
+                roi_ko = raw_input ("Are the region of interests ok? ").upper () [0] == 'N'
+                display_process.kill ()
+            self.arenas.append (new_arena)
             new_arena.create_mask_images_casu_images (self.config)
             new_arena.write_properties ()
             index += 1

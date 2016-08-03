@@ -43,14 +43,16 @@ class Config:
             self.spreading_waiting_time             = dictionary ['spreading_waiting_time']
             self.population_size                    = dictionary ['population_size']
             self.number_evaluations_per_chromosome  = dictionary ['number_evaluations_per_chromosome']
-            self.stopped_threshold                  = dictionary ['stopped_threshold']
-            self.aggregation_minDuration_thresh     = dictionary ['aggregation_minDuration_thresh']
+            #self.stopped_threshold                  = dictionary ['stopped_threshold']
+            #self.aggregation_minDuration_thresh     = dictionary ['aggregation_minDuration_thresh']
             self.fitness_function                   = dictionary ['fitness_function']
             self.arena_type                         = dictionary ['arena_type']
             self.constant_airflow                   = dictionary ['constant_airflow']
             self.frame_per_second                   = dictionary ['frame_per_second']
             self.image_width                        = dictionary ['image']['width']
             self.image_height                       = dictionary ['image']['height']
+            self.image_processing_pixel_count_previous_frame_threshold = dictionary ['image_processing']['pixel_count_previous_frame_threshold']
+            self.image_processing_pixel_count_background_threshold     = dictionary ['image_processing']['pixel_count_background_threshold']
         except KeyError as e:
             print ("The configuration file does not have parameter '%s'\n" % (str (e)))
             raise
@@ -86,8 +88,6 @@ evaluation_run_time: %d
 spreading_waiting_time: %d
 population_size: %d
 number_evaluations_per_chromosome: %d
-stopped_threshold : %d
-aggregation_minDuration_thresh : %d
 fitness_function : '%s'
 constant_airflow : '%s'
 arena_type : '%s'
@@ -95,6 +95,9 @@ frame_per_second : %d
 image :
     width : %d
     height : %d
+image_processing :
+    pixel_count_previous_frame_threshold : %d
+    pixel_count_background_threshold : %d
 """ % (self.number_bees,
        self.number_generations,
        self.number_evaluations_per_episode,
@@ -102,14 +105,15 @@ image :
        self.spreading_waiting_time,
        self.population_size,
        self.number_evaluations_per_chromosome,
-       self.stopped_threshold,
-       self.aggregation_minDuration_thresh,
        self.fitness_function,
        str (self.constant_airflow),
        self.arena_type,
        self.frame_per_second,
        self.image_width,
-       self.image_height)
+       self.image_height,
+       self.image_processing_pixel_count_previous_frame_threshold,
+       self.image_processing_pixel_count_background_threshold
+       )
 
 if __name__ == '__main__':
     print ("Debugging config.py")

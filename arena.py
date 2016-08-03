@@ -13,8 +13,14 @@ import random
 import time
 import Image
 
+def find_app (app):
+    command = "which " + app
+    process = subprocess.Popen (command, stdout = subprocess.PIPE, shell = True)
+    out, _ = process.communicate ()
+    return out [:-1]
 CONVERT_BIN_FILENAME = '/usr/bin/convert'
 CONVERT_BIN_FILENAME = '/usr/local/bin/convert'
+CONVERT_BIN_FILENAME = find_app ("convert")
 """
 Filename of the convert program.
 
@@ -23,7 +29,7 @@ It can be used to convert between image formats as well as resize an
 image, blur, crop, despeckle, dither, draw on, flip, join, re-sample,
 and much more.
 """
-COMPARE_BIN_FILENAME = '/usr/local/bin/compare'
+COMPARE_BIN_FILENAME = find_app ("convert")
 
 def load_worker_settings ():
     """
@@ -187,6 +193,11 @@ class AbstractArena:
         #import functools
         #print "Running", functools.reduce (lambda x, y: x + " " + y, command)
         #raw_input ("PRess ENTER to continue with debuggin")
+        try:
+            value = float (out)
+        except:
+            print ("Result is [" + out + "]")
+            raise
         return float (out)
         
     def compare_images (self, ith_image):

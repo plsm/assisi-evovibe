@@ -6,7 +6,7 @@
 # Ziad Salem
 # Payam Zahadat
 
-from assisipy import casu
+#from assisipy import casu
 
 import random
 import time
@@ -24,11 +24,12 @@ class SinglePulseGenePause (AbstractChromosome):
     """
     This chromosome contains one gene that represents the pause time.  The vibration frequency is 440 Hz.  The vibration duration is 1 second.
     """
-    MIN_TIME = 0.0
-    MAX_TIME = 1.0
+    MIN_PAUSE_PERIOD = 100 #assisipy.casu.VIBE_PERIOD_MIN
+    MAX_PAUSE_PERIOD = 1000
+    STEP_PAUSE_PERIOD = 10
 
     VIBRATION_FREQUENCY = 440
-    VIBRATION_TIME = 1.0
+    VIBRATION_PERIOD = 1000
     VIBRATION_INTENSITY = 50
 
     @staticmethod
@@ -36,10 +37,10 @@ class SinglePulseGenePause (AbstractChromosome):
         """
         Run the vibration model represented by the given SinglePulseGenePause chromosome.
         """
-        pause_time = chromosome [0]
-        vibe_periods = [int (1000 * SinglePulseGenePause.VIBRATION_TIME), int (1000 * pause_time)]
-        vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY,         1]
-        vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY,         0]
+        pause_period = chromosome [0]
+        vibe_periods = [SinglePulseGenePause.VIBRATION_PERIOD,    pause_period]
+        vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY,            1]
+        vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY,            0]
         casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
         time.sleep (evaluation_runtime)
         casu.speaker_standby ()
@@ -50,14 +51,15 @@ class SinglePulseGenePause (AbstractChromosome):
         Return a random instance of a simple SinglePulseGenePause chromosome.
         This method is used as a generator by the evolutionary algorithm.
         """
-        pause_time = random.uniform (SinglePulseGenePause.MIN_TIME, SinglePulseGenePause.MAX_TIME)
-        return [pause_time]
+        pause_period = random.randrange (SinglePulseGenePause.MIN_PAUSE_PERIOD, SinglePulseGenePause.MAX_PAUSE_PERIOD + 1, SinglePulseGenePause.STEP_PAUSE_PERIOD)
+        return [pause_period]
 
 
     @staticmethod
     def get_bounder ():
         from inspyred import ec
-        return ec.Bounder (SinglePulseGenePause.MIN_TIME, SinglePulseGenePause.MAX_TIME)
+        r = range (SinglePulseGenePause.MIN_PAUSE_PERIOD, SinglePulseGenePause.MAX_PAUSE_PERIOD + 1, SinglePulseGenePause.STEP_PAUSE_PERIOD)
+        return ec.DiscreteBounder (r)
 
 if __name__ == '__main__':
     pass

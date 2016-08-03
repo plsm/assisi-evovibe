@@ -7,74 +7,82 @@ import csv
 import Image
 import assisipy
 
-class Counter:
-    """
-    Maintains a counter on the current state of the incremental evolution algorithm.
-    Since the program has to be stopped at the end of the day and resumed in the following day, we need to compute where we are when we resume.
-    Namely, we need to know the current generation number, and in a generation which chromosome is being evaluated.
-    """
-    def __init__ (self, first_iteration = True):
-        if first_iteration:
-            self.base_generation = 0
-            self.base_evaluation_in_generation = 0
-        else:
-            self.base_generation = -999
-            self.base_evaluation_in_generation = -999
+# Column indexes in file population.csv
+POP_GENERATION       = 0
+POP_EPISODE          = 1
+POP_CHROMOSOME_GENES = 2
+
+# Column indexes in file evaluation.csv
+EVA_GENERATION       = 0
+EVA_EPISODE          = 1
+EVA_ITERATION        = 2
+EVA_SELECTED_ARENA   = 3
+EVA_ACTIVE_CASU      = 4
+EVA_VALUE            = 5
+EVA_CHROMOSOME_GENES = 6
 
 class Evaluator:
     """
     Class that implements the evaluator used by the inspyred evolutionary algorithm classes.
-    The evaluator computes the fitness function.  Each chromosome represents a vibration model.
+    The evaluator computes the fitness value of each chromosome.  Each chromosome represents a vibration model.
+
+    This evaluator is used by inspyred to compute the fitness value of the initial value.
+    The evolve method enters a loop whose end condition depends on the terminator used.
+    Inside the loop, it selects the next population, evalutes the chromosomes in the population,
+    replace chromosomes in the population, archive chromosomes, increment
+    the generation number counter, call the observers.
 
     :param config: A Python object with the following attributes
     """
-    def __init__ (self, config, es, episode, counter = Counter ()):
+    def __init__ (self, config, episode, generation_number = 1, continue_values = None):
         self.config = config
-        self.es = es
         self.episode = episode
-        self.counter = counter
+        self.generation_number = generation_number
+        self.continue_values = continue_values
+        # inspyred is moronic because it calls the evaluator to compute the initial fitness,
+        # does not increment the generation number, then enters the evolution loop where it
+        # first calls the evaluator and then increments the generation number
         self.number_analysed_frames = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
 
     def population_evaluator (self, population, args = None):
         """
-        Evaluate a population.  This is main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
+        Evaluate a population.  This is the main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
         """
-        with open (self.config.experiment_folder + "population.csv", 'a') as fp:
-            f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
-            for chromosome in population:
-                row = [
-                    self.es.num_generations + self.counter.base_generation,
-                    self.episode.episode_index,
-                    ] + chromosome
-                f.writerow (row)
-            fp.close ()
-        result = [self.chromosome_fitness (chromosome) for chromosome in population]
-        print ("Generation ", self.es.num_generations, "  Population fitness: " , result)
+        if self.continue_values is None:
+            with open (self.config.experiment_folder + "population.csv", 'a') as fp:
+                f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
+                for chromosome in population:
+                    row = [
+                        self.generation_number,
+                        self.episode.episode_index,
+                        ] + chromosome
+                    f.writerow (row)
+                fp.close ()
+            result = [self.chromosome_fitness (chromosome) for chromosome in population]
+        else:
+            result = [self.chromosome_fitness (chromosome) for chromosome in population]
+            self.continue_values = None
+        print ("Generation ", self.generation_number, "  Population fitness: " , result)
+        self.generation_number += 1
         return result
-#        population_fitnesses = []
-#        for chromosome in population:
-#            population_fitnesses.append (self.chromosome_fitness (chromosome))
-#        return population_fitnesses
 
     def chromosome_fitness (self, chromosome):
         """
         Compute the fitness of chromosome.  This is the value that is going to be
         used by the evolutionary algorithm in the inspyred package.
         """
-        values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
+        if self.continue_values is None:
+            values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
+        else:
+            values = []
+            for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
+                if self.continue_values [0] is None:
+                    values.append (self.iteration_step (chromosome, index_evaluation))
+                else:
+                    values.append (self.continue_values [0])
+                self.continue_values = self.continue_values [1:]
         return sum (values) / self.config.number_evaluations_per_chromosome
-        # result = 0.0
-        # fits = []
-        # for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
-        #     f = self.iteration_step (chromosome, index_evaluation)
-        #     result += f
-        #     fits.append (f)
-        # result = result / self.config.number_evaluations_per_chromosome
-        # self.write_fitness (chromosome, result)
-        # ########################### check code at this point
-        # return result
 
-        
     def iteration_step (self, candidate, index_evaluation):
         """
         Experimental step where a candidate chromosome evaluation is done.
@@ -124,6 +132,7 @@ class Evaluator:
         bashCommandSplit = "ffmpeg" + \
                            " -i " + filename_real + \
                            " -r " + str (self.config.frame_per_second) + \
+                           " -loglevel error" + \
                            " -frames " + str (self.number_analysed_frames) + \
                            " -f image2 tmp/iteration-image-%4d.jpg"
         p = subprocess.Popen (bashCommandSplit, shell=True, executable='/bin/bash') #to create and save the real images from the video depending on the iteration number
@@ -165,122 +174,25 @@ class Evaluator:
             freader.next ()
             freader.next ()
             for row in freader:
-                if row [picked_arena.selected_worker_index * 2] > 100 and row [picked_arena.selected_worker_index * 2 + 1] < 100:
+                if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
                     result += row [picked_arena.selected_worker_index * 2]
             fp.close ()
         return result
 
-    def old_timeToAggregate (self, imgpath, imgname_incomplete):
-        n = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
-        for i in range (1, n + 1):
-            fname = imgname_incomplete + "{:04d}.jpg.csv".format (i)
-            with open (imgpath + fname, 'rb') as csvfile:
-                freader = csv.reader (csvfile, delimiter=';')
-                #first row header, second row values
-                row = freader.next()
-                row = freader.next()
-                bcount = float (row [0])   #-float(row[0])   ### MAKE SURE ABOUT THE ORDER OF THE CASUS: WHICH ONE IS VIBRATING ACCORDING TO GERALDS SOFTWARE
-                if bcount >= self.config.aggregation_threhsoldN:
-                    return i
-            # Check with Ziad: why this sleep?
-            #time.sleep (1);
-        return -1
-
-    def timeToAggregate (self):
-        """
-        Read the CSV file that resulted from processing an iteration images.
-        """
-        fname = self.config.experimentpath + "iteration-" + str (self.episode.current_evaluation_in_episode) + "-data.csv"
-        fp = open (fname, 'r')
-        freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
-        freader.next () # skip header row
-        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
-        for i in range (1, n + 1):
-            row = freader.next ()
-            bcount = float (row [0])
-            dcount = float (row [1])
-            if bcount >= self.config.aggregation_threhsoldN and dcount <= self.config.stopped_threshold:
-                fp.close ()
-                return i
-        fp.close ()
-        return -1
-
-    def timeToAggregate_andStay (self):
-        agg_status = False
-        agg_start = -1
-        #aggregation_happend_at = -1
-        
-        fname = self.config.experimentpath + "iteration-" + str (self.episode.current_evaluation_in_episode) + "-data.csv"
-        fp = open (fname, 'r')
-        freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
-        freader.next () # skip header row
-        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
-        for i in range(1,n+1):
-                row = freader.next()
-                bcount = float (row [0])   #-float(row[0])   ### MAKE SURE ABOUT THE ORDER OF THE CASUS: WHICH ONE IS VIBRATING ACCORDING TO GERALDS SOFTWARE
-                dcount = float (row [1])
-                if bcount >= self.config.aggregation_threhsoldN and dcount <= self.config.stopped_threshold:
-                    if agg_status==False:
-                        agg_status = True
-                        agg_start = i
-                    elif agg_status==True and i - agg_start >= self.config.aggregation_minDuration_thresh:
-                        #aggregation_happend_at = agg_start
-                        return aggregation_happend_at
-                else:
-                    agg_status = False
-                    agg_start = -1
-        return -1
-
-    def fitness_non_moving_pixels_bee_blobs (self):
-        """This function computes the sum of the number of non-moving pixels in frames
-        where there are bee blobs
-        in the active CASU.
-
-        This fitness function depends on the aggregation threshold which is
-        the percentage of pixels that are different when considering the
-        background and an iteration.
-
-        """
-        result = 0
-        fname = self.config.experimentpath + "iteration-" + str (self.episode.current_evaluation_in_episode) + "-data.csv"
-        fp = open (fname, 'r')
-        freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
-        freader.next () # skip header row
-        n = (int) (self.config.evaluation_runtime * self.config.frame_per_second)
-        for i in xrange (1, n + 1):
-            row = freader.next ()
-            bcount = float (row [0])   #-float(row[0])   ### MAKE SURE ABOUT THE ORDER OF THE CASUS: WHICH ONE IS VIBRATING ACCORDING TO GERALDS SOFTWARE
-            dcount = float (row [1])
-            if bcount >= self.config.aggregation_threhsoldN:
-                result += self.config.stopped_threshold - dcount
-        return result
-
     def write_evaluation (self, picked_arena, candidate, evaluation_score):
+        """
+        Save the result of a chromosome evaluation.
+        """
         with open (self.config.experiment_folder + "evaluation.csv", 'a') as fp:
             f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
             f.writerow ([
-                self.es.num_generations + self.counter.base_generation,
+                self.generation_number,
                 self.episode.episode_index,
+                self.episode.current_evaluation_in_episode,
                 picked_arena.index,
                 picked_arena.workers [picked_arena.selected_worker_index][0],  # active casu number
                 evaluation_score] + candidate)
             fp.close ()
-    
-    def write_fitness (self, chromosome, fitness):
-        """
-        Save the result of a chromosome evaluation.
-        """
-        with open (self.config.experiment_folder + "population.csv", 'a') as fp:
-            f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
-            row = [
-                self.es.num_generations + self.counter.base_generation,
-                self.episode.episode_index,
-                fitness
-                ] + chromosome
-            print (row)
-            f.writerow (row)
-            fp.close ()
-            print ("Chromosome evaluation saved")            
 
         
         

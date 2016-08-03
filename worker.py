@@ -11,10 +11,12 @@ import sys
 import zmq
 import signal
 
-INITIALISE             = 1
-ACTIVE_CASU            = 5
-PASSIVE_CASU           = 6
-CASU_STATUS            = 4
+INITIALISE                   = 1
+ACTIVE_CASU                  = 5
+PASSIVE_CASU                 = 6
+CASU_STATUS                  = 4
+VIBRATION_PATTERN_440_09_01  = 7
+STANDBY_CASU                 = 8
 WORKER_OK              = 1000
 
 CASU_TEMPERATURE = 28
@@ -23,25 +25,29 @@ evaluation_run_time = None
 spreading_waiting_time = None
 frame_per_second = None
 
+def blip_casu ():
+    a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
+    time.sleep (2.0 / frame_per_second)
+    a_casu.diagnostic_led_standby ()
+    
 def cmd_initialise ():
-    global evaluation_run_time
-    global spreading_waiting_time
-    global frame_per_second
     if len (message) != 4:
         print ("Invalid initialisation message!\n" + str (message))
         a_casu.stop ()
         sys.exit (3)
-    else:
-        print ("Initialisation message...")
-        evaluation_run_time = message [1]
-        spreading_waiting_time = message [2]
-        frame_per_second = message [3]
-        zmq_sock_utils.send (socket, [WORKER_OK])
+    global evaluation_run_time
+    global spreading_waiting_time
+    global frame_per_second
+    print ("Initialisation message...")
+    evaluation_run_time = message [1]
+    spreading_waiting_time = message [2]
+    frame_per_second = message [3]
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.diagnostic_led_standby ()
     a_casu.airflow_standby ()
     a_casu.ir_standby ()
     a_casu.speaker_standby ()
+    zmq_sock_utils.send (socket, [WORKER_OK])
 
 def cmd_active_casu ():
     print ("Active CASU...")
@@ -59,7 +65,6 @@ def cmd_active_casu ():
     a_casu.airflow_standby ()
     print ("Done!")
     zmq_sock_utils.send (socket, [WORKER_OK])
-    
 
 def cmd_passive_casu ():
     print ("Passive CASU...")
@@ -74,34 +79,36 @@ def cmd_passive_casu ():
     a_casu.airflow_standby ()
     print ("Done!")
     zmq_sock_utils.send (socket, [WORKER_OK])
-    
-    
-def blip_casu ():
-    a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
-    time.sleep (2.0 / frame_per_second)
-    a_casu.diagnostic_led_standby ()
-    
-    
-def cmd_test_chromosome ():
-    vibration_run_time = x
-    number_repeats = x
-    for _ in xrange (number_repeats):
+
+def cmd_vibration_pattern_440_09_01 ():
+    print ("Running vibration pattern: frequency 440Hz, duration 0.9s, pause 0.1s")
+    number_repeats = message [1]
+    for n in xrange (number_repeats):
+        print ("Repeat #%d" % (n + 1))
         blip_casu ()
         vibe_periods = [900,  100]
         vibe_freqs   = [440,    1]
         vibe_amps    = [ 50,    0]
         el_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
-        time.sleep (vibration_run_time)
+        time.sleep (evaluation_run_time)
         blip_casu ()
         a_casu.speaker_standby ()
-        time.sleep (idle_runtime)
+        time.sleep (spreading_waiting_time)
+    zmq_sock_utils.send (socket, [WORKER_OK])
 
+def cmd_standby_casu ():
+    print ("Putting CASU in standby")
+    a_casu.set_temp (CASU_TEMPERATURE)
+    a_casu.diagnostic_led_standby ()
+    a_casu.airflow_standby ()
+    a_casu.ir_standby ()
+    a_casu.speaker_standby ()
+    zmq_sock_utils.send (socket, [WORKER_OK])
 
 def signal_handler (signal, frame):
     print ('You pressed Ctrl+C!')
     a_casu.stop ()
     sys.exit (0)
-
 
 if __name__ == '__main__':
 
@@ -157,5 +164,9 @@ if __name__ == '__main__':
         elif command == CASU_STATUS:
             print (a_casu.get_temp (casu.ARRAY))
             zmq_sock_utils.send (socket, a_casu.get_temp (casu.TEMP_WAX))
+        elif command == VIBRATION_PATTERN_440_09_01:
+            cmd_vibration_pattern_440_09_01 ()
+        elif command == STANDBY_CASU:
+            cmd_standby_casu ()
         else:
             print ("Unknown command:\n%s" % (str (message)))
