@@ -60,7 +60,7 @@ def connect_workers (worker_settings, config):
         socket.connect (worker_address)
         result [casu_number] = socket
         print ("Initializing worker responsible for casu #%d..." % (casu_number))
-        answer = zmq_sock_utils.send_recv (socket, [worker.INITIALISE, config.evaluation_run_time, config.spreading_waiting_time, config.frame_per_second])
+        answer = zmq_sock_utils.send_recv (socket, [worker.INITIALISE, config.evaluation_run_time, config.spreading_waiting_time, config.frame_per_second, config.chromosome_type])
         print ("Worker responded with: %s" % (str (answer)))
     #print result
     return result

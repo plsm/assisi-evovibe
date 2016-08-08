@@ -26,7 +26,7 @@ def parse_arguments ():
         '--command', '-c',
         default = None,
         type = str,
-        help = 'what should we do? new-run: perform a new experimental run')
+        help = 'what should we do?\n\tnew-run: perform a new experimental run\n\tcontinue-run: continue a previous run')
     parser.add_argument (
         '--run', '-r',
         default = None,
@@ -80,26 +80,11 @@ def create_experimental_run_files (config):
         row = ["generation", "episode", "iteration", "selected_arena", "active_casu", "value", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
-
-def run_evolutionary_strategy_algorithm (config, worker_zmqs):
-    """
-    Run the Evolutionary Strategy for the given configuration.
-    """
-    epsd = episode.Episode (config, worker_zmqs)
-    epsd.initialise ()
-    es = inspyred.ec.ES (random.Random ())
-    evltr = evaluator.Evaluator (config, epsd)
-    es.terminator = [inspyred.ec.terminators.generation_termination]
-    es.variator = [chromosome.SinglePulseGenePause.get_variator ()]
-    es.evolve (
-        generator = chromosome.SinglePulseGenePause.random_generator,
-        evaluator = evltr.population_evaluator,
-        pop_size = config.population_size,
-        bounder = chromosome.SinglePulseGenePause.get_bounder (),
-        maximize = True,
-        max_generations = config.number_generations)
-    epsd.finish ()
-    print ("Evolutionary Strategy algorithm finished!")
+    with open (config.experiment_folder + "fitness.csv", 'w') as fp:
+        f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+        row = ["generation", "fitness", "chromosome_genes"]
+        f.writerow (row)
+        fp.close ()
 
 def check_run (config, args):
     run_number = args.run
@@ -119,7 +104,7 @@ def load_population_and_evaluation (config):
         current_generation = int (rows [-1][evaluator.POP_GENERATION])
         current_episode = int (rows [-1][evaluator.POP_EPISODE])
         s = initial_population [-config.population_size:]
-        seeds = [[int(c[0])] for c in s]
+        seeds = [[int (g) for g in c] for c in s]  # I'm assuming that all genes are integers.
         fp.close ()
     with open (config.experiment_folder + "evaluation.csv", "r") as fp:
         f = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
@@ -130,9 +115,21 @@ def load_population_and_evaluation (config):
                 eva_values.append (row [evaluator.EVA_VALUE])
         eva_values += [None] * (config.population_size * config.number_evaluations_per_chromosome - len (eva_values))
         fp.close ()
-    return (current_generation, current_episode, seeds, eva_values)
+    return (current_generation, current_episode + 1, seeds, eva_values)
 
-def continue_evolutionary_strategy_algorithm (config, worker_zmqs, current_generation, episode_index, seeds, eva_values):
+def fitness_save_observer (population, num_generations, num_evaluations, args):
+    """
+    Observer passed to inspyred evolutionary algorithm to save the data to file fitness.csv.
+    """
+    config_experiment_folder = args ['config_experiment_folder']
+    with open (config_experiment_folder + "fitness.csv", 'a') as fp:
+        f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
+        for individual in population:
+            row = [num_generations, individual.fitness] + individual.candidate [0:len (individual.candidate) / 2]
+            f.writerow (row)
+        fp.close ()
+
+def run_inspyred (config, worker_zmqs, current_generation = 1, episode_index = 1, seeds = None, eva_values = None):
     """
     Run the Evolutionary Strategy for the given configuration.
     """
@@ -141,18 +138,27 @@ def continue_evolutionary_strategy_algorithm (config, worker_zmqs, current_gener
     es = inspyred.ec.ES (random.Random ())
     evltr = evaluator.Evaluator (config, epsd, current_generation, eva_values)
     es.terminator = [inspyred.ec.terminators.generation_termination]
-    es.variator = [chromosome.SinglePulseGenePause.get_variator ()]
+    es.observer = [fitness_save_observer]
+    if config.chromosome_type == "SinglePulseGenePause":
+        es.variator = [chromosome.SinglePulseGenePause.get_variator ()]
+        generator = chromosome.SinglePulseGenePause.random_generator
+        bounder = chromosome.SinglePulseGenePause.get_bounder ()
+    elif config.chromosome_type == "SinglePulseGenesPulse":
+        es.variator = [chromosome.SinglePulseGenesPulse.get_variator ()]
+        generator = chromosome.SinglePulseGenesPulse.random_generator
+        bounder = None
     es.evolve (
-        generator = chromosome.SinglePulseGenePause.random_generator,
+        generator = generator,
         evaluator = evltr.population_evaluator,
         pop_size = config.population_size,
-        bounder = chromosome.SinglePulseGenePause.get_bounder (),
+        bounder = bounder,
         maximize = True,
         max_generations = config.number_generations,
-        seeds = seeds)
+        seeds = seeds,
+        config_experiment_folder = config.experiment_folder)
     epsd.finish ()
     print ("Evolutionary Strategy algorithm finished!")
-
+    
 args = parse_arguments ()
 if args.command in ['new-run', 'new_run']:
     cfg = config.Config ()
@@ -161,14 +167,14 @@ if args.command in ['new-run', 'new_run']:
     calculate_experiment_folder_for_new_run (cfg, args)
     create_directories_for_experimental_run (cfg)
     create_experimental_run_files (cfg)
-    run_evolutionary_strategy_algorithm (cfg, worker_zmqs)
+    run_inspyred (cfg, worker_zmqs)
 elif args.command in ['continue-run', 'continue-run']:
     cfg = config.Config ()
     cfg.status ()
     check_run (cfg, args)
     current_generation, current_episode, seeds, eva_values = load_population_and_evaluation (cfg)
     worker_zmqs = arena.connect_workers (arena.load_worker_settings (), cfg)
-    continue_evolutionary_strategy_algorithm (cfg, worker_zmqs, current_generation, current_episode + 1, seeds, eva_values)
+    run_inspyred (cfg, worker_zmqs, current_generation, current_episode + 1, seeds, eva_values)
 elif args.command == None:
     print ("Nothing to do!\n")
 else:

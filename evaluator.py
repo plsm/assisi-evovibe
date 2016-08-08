@@ -143,7 +143,7 @@ class Evaluator:
         p = subprocess.Popen (bashCommandSplit, shell=True, executable='/bin/bash') #to create and save the real images from the video depending on the iteration number
         p.wait ()
         print ("Finished spliting iteration " + str (self.episode.current_evaluation_in_episode) + " video.")
-        
+
     def compare_images (self, picked_arena):
         """
         Compare images created in a chromosome evaluation and generate a CSV file.
@@ -170,6 +170,28 @@ class Evaluator:
             return self.stopped_frames (picked_arena)
         elif self.config.fitness_function == 'penalize_passive_casu':
             return self.penalize_passive_casu (picked_arena)
+        elif self.config.fitness_function == 'background_bees_active_minus_passive':
+            return self.background_bees_active_minus_passive (picked_arena)
+
+    def background_bees_active_minus_passive (self, picked_arena):
+        """
+        ARe there more bees in the ROI
+        for image in video
+            result += bee_pixels_active_casu
+            result -= bee_pixel passive casu
+        """
+        result = 0
+        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next ()
+            freader.next ()
+            for row in freader:
+                if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold:
+                    result += row [picked_arena.selected_worker_index * 2]
+                if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.image_processing_pixel_count_background_threshold:
+                    result += -row [(1 - picked_arena.selected_worker_index) * 2]
+            fp.close ()
+        return result
 
     def stopped_frames (self, picked_arena):
         """
@@ -183,6 +205,38 @@ class Evaluator:
             for row in freader:
                 if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
                     result += row [picked_arena.selected_worker_index * 2]
+            fp.close ()
+        return result
+
+    def proposal (self, picked_arena):
+        """
+        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+        """
+        result = 0
+        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next ()
+            freader.next ()
+            for row in freader:
+                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                    result += 1
+            fp.close ()
+        return result
+
+    def proposal_v2 (self, picked_arena):
+        """
+        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+        """
+        result = 0
+        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next ()
+            freader.next ()
+            for row in freader:
+                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                    result += 1
+                if  row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                    result += -1
             fp.close ()
         return result
 
@@ -218,6 +272,3 @@ class Evaluator:
                 evaluation_score] + candidate)
             fp.close ()
 
-        
-        
-        

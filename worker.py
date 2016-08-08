@@ -25,6 +25,7 @@ CASU_TEMPERATURE = 28
 evaluation_run_time = None
 spreading_waiting_time = None
 frame_per_second = None
+run_vibration_model = None
 
 def blip_casu ():
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
@@ -32,17 +33,22 @@ def blip_casu ():
     a_casu.diagnostic_led_standby ()
     
 def cmd_initialise ():
-    if len (message) != 4:
+    if len (message) != 5:
         print ("Invalid initialisation message!\n" + str (message))
         a_casu.stop ()
         sys.exit (3)
     global evaluation_run_time
     global spreading_waiting_time
     global frame_per_second
+    global run_vibration_model
     print ("Initialisation message...")
     evaluation_run_time = message [1]
     spreading_waiting_time = message [2]
     frame_per_second = message [3]
+    if message [4] == "SinglePulseGenePause":
+        run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
+    elif message [4] == "SinglePulseGenesPulse":
+        run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.diagnostic_led_standby ()
     a_casu.airflow_standby ()
@@ -55,7 +61,7 @@ def cmd_active_casu ():
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
-    chromosome.SinglePulseGenePause.run_vibration_model (message [1], a_casu, evaluation_run_time)
+    run_vibration_model (message [1], a_casu, evaluation_run_time)
     a_casu.speaker_standby ()
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
