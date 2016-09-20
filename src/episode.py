@@ -23,9 +23,10 @@ class Episode:
     This class can be used by the incremental evolution or by a parameter sweep.
     """
 
-    def __init__ (self, config, worker_zmqs, episode_index = 1):
+    def __init__ (self, config, worker_settings, experiment_folder, episode_index = 1):
         self.config = config
-        self.worker_zmqs = worker_zmqs
+        self.worker_settings = worker_settings
+        self.experiment_folder = experiment_folder
         self.current_evaluation_in_episode = 0
         self.episode_index = episode_index
 
@@ -39,7 +40,7 @@ class Episode:
 
         * ask the user to put bees in the arena(s);
         """
-        self.current_path = "%sepisodes/%03d/" % (self.config.experiment_folder, self.episode_index)
+        self.current_path = "%sepisodes/%03d/" % (self.experiment_folder, self.episode_index)
         try:
             os.makedirs (self.current_path)
         except OSError:
@@ -111,9 +112,15 @@ class Episode:
                       ' ! jpegenc ! avimux name=mux ! filesink location=' + filename    # with time - everytime generate a new file
         p = subprocess.Popen (bashCommand, shell = True, executable = '/bin/bash') #run the recording stream
         p.wait ()
+        bashCommandSplit = "avconv" + \
+            " -i " + filename + \
+            " -r 0.1" + \
+            " -loglevel error" + \
+            " -f image2 " + self.current_path + "Background.jpg" #definition to extract the single image for background from the video
         bashCommandSplit = "ffmpeg" + \
             " -i " + filename + \
             " -r 0.1" + \
+            " -loglevel error" + \
             " -f image2 " + self.current_path + "Background.jpg" #definition to extract the single image for background from the video
         p = subprocess.Popen (bashCommandSplit, shell = True, executable = '/bin/bash') #run the script of the extracting
         p.wait ()
@@ -129,13 +136,17 @@ class Episode:
         go = True
         self.arenas = []
         index = 1
+        for ws in self.worker_settings.values ():
+            ws.in_use = False
         while go:
             img_path = "%sarena-%d/" % (self.current_path, index)
             os.makedirs (img_path)
             roi_ko = True
             while roi_ko:
                 if self.config.arena_type == 'StadiumBorderArena':
-                    new_arena = arena.StadiumBorderArena (self.worker_zmqs, self.current_path, img_path, index)
+                    new_arena = arena.StadiumBorderArena (self.worker_settings, self.current_path, img_path, index, self.config)
+                elif self.config.arena_type == 'CircularArena':
+                    new_arena = arena.CircularArena (self.worker_settings, self.current_path, img_path, index, self.config)
                 else:
                     print ("Unknown arena type: %s" % (str (self.config.arena_type)))
                 new_arena.create_region_of_interests_image ()
@@ -179,11 +190,29 @@ class Episode:
         print ("Picked arena #%d." % (picked + 1))
         return self.arenas [picked]
         
-    def finish (self):
+    def finish (self, end_evolutionary_algorithm = False):
         """
         In the finish phase of an episode we:
 
         * tell the user to remove the bees from the arena;
 
         """
-        raw_input ("Remove the bees from the arena(s) and press ENTER to continue. ")
+        print ("Remove the bees from the arena(s)!")
+        if not end_evolutionary_algorithm:
+            print ("Change the wax!")
+            print ("Rearrange the arena(s)!")
+        raw_input ("When done, press ENTER to continue. ")
+
+if __name__ == '__main__':
+    import worker_settings
+    lws = worker_settings.load_worker_settings ('workers')
+    for ws in lws:
+        print ws
+    import new_config
+    cfg = new_config.Config ()
+    dws = dict ([(ws.casu_number, ws) for ws in lws])
+    epsd = Episode (cfg, dws, '/tmp/assisi/')
+    epsd.initialise ()
+    epsd.ask_user (None)
+    epsd.increment_evaluation_counter ()
+    picked_arena = epsd.select_arena ()

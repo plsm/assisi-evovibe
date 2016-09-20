@@ -6,6 +6,10 @@ import arena
 import episode
 import evaluator
 import chromosome
+import worker
+
+import assisipy.deploy
+import assisipy.assisirun
 
 import inspyred
 
@@ -13,6 +17,110 @@ import argparse
 import os
 import csv
 import random
+import yaml
+import zmq
+import zmq_sock_utils
+
+class WorkerSettings:
+    """
+    Worker settings used by the master program to deploy the workers.
+    These settings specify the CASU that the worker will control,
+    the ZMQ address where the worker will listen for commands from the master,
+    and the parameters of the RTC file.
+    """
+    def __init__ (self, dictionary):
+        self.casu_number = dictionary ['casu_number']
+        self.wrk_addr    = dictionary ['wrk_addr']
+        self.pub_addr    = dictionary ['pub_addr']
+        self.sub_addr    = dictionary ['sub_addr']
+        self.msg_addr    = dictionary ['msg_addr']
+        self.socket = None
+        self.in_use = False
+    def __key_ (self):
+        return 'casu-%03d' % (self.casu_number)
+    def to_dep (self):
+        return (
+            self.__key_ () ,
+            {
+                'controller' : os.path.dirname (os.path.abspath (__file__)) + '/worker.py'
+              , 'extra'      : [
+                    os.path.dirname (os.path.abspath (__file__)) + '/chromosome.py'
+                  , os.path.dirname (os.path.abspath (__file__)) + '/zmq_sock_utils.py'
+                  ]
+              , 'args'       : [str (self.casu_number), 'tcp://*:%s' % (self.wrk_addr.split (':') [2])]
+              , 'hostname'   : self.wrk_addr.split (':') [1][2:]
+              , 'user'       : 'assisi'
+              , 'prefix'     : 'pedro/evovibe'
+              , 'results'    : []
+            })
+    def to_arena (self):
+        return (
+            self.__key_ () ,
+            {
+                'pub_addr' : self.pub_addr
+              , 'sub_addr' : self.sub_addr
+              , 'msg_addr' : self.msg_addr
+            })
+    def connect_to_worker (self, config):
+        """
+        Connect to the worker and return a tuple with the CASU number and this instance.
+        """
+        context = zmq.Context ()
+        print ("Connecting to worker at %s responsible for casu #%d..." % (self.wrk_addr, self.casu_number))
+        self.socket = context.socket (zmq.REQ)
+        self.socket.connect (self.wrk_addr)
+        print ("Initializing worker responsible for casu #%d..." % (self.casu_number))
+        answer = zmq_sock_utils.send_recv (self.socket, [worker.INITIALISE, config.evaluation_run_time, config.spreading_waiting_time, config.frame_per_second, config.sound_hardware, config.chromosome_type])
+        print ("Worker responded with: %s" % (str (answer)))
+        return (self.casu_number, self)
+    def terminate_session (self):
+        """
+        Terminate the session with the worker, which causes the worker process to finish.
+        """
+        print ("Sending terminate command to worker at %s responsible for casu #%d..." % (self.wrk_addr, self.casu_number))
+        answer = zmq_sock_utils.send_recv (self.socket, [worker.TERMINATE])
+        print ("Worker responded with: %s" % (str (answer)))
+
+def load_worker_settings (filename):
+    """
+    Return a list with the worker settings loaded from a file with the given name.
+    """
+    file_object = open (filename, 'r')
+    dictionary = yaml.load (file_object)
+    file_object.close ()
+    worker_settings = [
+        WorkerSettings (dictionary ['worker-%02d' % (index)])
+        for index in xrange (1, dictionary ['number_workers'] + 1)]
+    print ("Loaded worker settings")
+    return worker_settings
+
+def deploy_workers (filename, run_number):
+    print ('\n\n* ** Worker Apps Launch')
+    # load worker settings
+    worker_settings = load_worker_settings (filename)
+    # create assisi file
+    fp_assisi = open ('tmp/workers.assisi', 'w')
+    yaml.dump ({'arena' : 'workers.arena'}, fp_assisi, default_flow_style = False)
+    yaml.dump ({'dep' : 'workers.dep'}, fp_assisi, default_flow_style = False)
+    fp_assisi.close ()
+    print ("Created assisi file")
+    # create dep file
+    fp_dep = open ('tmp/workers.dep', 'w')
+    yaml.dump ({'arena' : dict ([ws.to_dep () for ws in worker_settings])}, fp_dep, default_flow_style = False)
+    fp_dep.close ()
+    print ("Created dep file")
+    # create arena file
+    fp_arena = open ('tmp/workers.arena', 'w')
+    yaml.dump ({'arena' : dict ([ws.to_arena () for ws in worker_settings])}, fp_arena, default_flow_style = False)
+    fp_arena.close ()
+    print ("Created arena file")
+    # deploy the workers
+    d = assisipy.deploy.Deploy ('tmp/workers.assisi')
+    d.prepare ()
+    d.deploy ()
+    ar = assisipy.assisirun.AssisiRun ('tmp/workers.assisi')
+    ar.run ()
+    print ("Workers have finished")
 
 def parse_arguments ():
     """
@@ -36,66 +144,76 @@ def parse_arguments ():
         '--debug',
         action = 'store_true',
         help = "enable debug mode")
+    parser.add_argument (
+        '--deploy',
+        action = 'store_true',
+        help = "deploy the workers automatically")
+    parser.add_argument (
+        '--workers',
+        default = 'workers',
+        type = str,
+        help = 'worker settings file to load')
     return parser.parse_args ()
 
 
-def calculate_experiment_folder_for_new_run (config, args):
+def calculate_experiment_folder_for_new_run (args):
     """
-    Compute the experiment folder for a new experimental run.  This folder is where all the files generated by an experimental run are stored.
+    Compute the experiment folder for a new experimental run.
+    This folder is where all the files generated by an experimental run are stored.
     """
     run_number = 1
-    print args.debug, ("sim" if args.debug else "não")
     while True:
         result = 'run-%03d/' % (run_number)
         if args.debug or not os.path.isdir (result) and not os.path.exists (result):
-            config.experiment_folder = result
-            return
+            return result
         run_number += 1
 
-def create_directories_for_experimental_run (config):
+def create_directories_for_experimental_run (experiment_folder, args):
     """
     Create the directories for an experimental run.
     """
     for path in [
-            "tmp/",
-            config.experiment_folder,
-            config.experiment_folder + "logs/",
-            config.experiment_folder + "episodes/"]:
+            experiment_folder,
+            experiment_folder + "logs/",
+            experiment_folder + "episodes/"]:
         try:
             os.makedirs (path)
-        except OSError:
-            print ("Someone as already created path %s." % (path))
+        except:
+            if not args.debug:
+                raise
 
-def create_experimental_run_files (config):
+def create_experimental_run_files (experiment_folder):
     """
-    Create the files that are going to store the data produced by an experimental run.  The data is stored in CSV files.  The files are initialized with a header row.
+    Create the files that are going to store the data produced by an experimental run.
+    The data is stored in CSV files.  The files are initialized with a header row.
     """
-    with open (config.experiment_folder + "population.csv", 'w') as fp:
+    with open (experiment_folder + "population.csv", 'w') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         row = ["generation", "episode", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
-    with open (config.experiment_folder + "evaluation.csv", 'w') as fp:
+    with open (experiment_folder + "evaluation.csv", 'w') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         row = ["generation", "episode", "iteration", "selected_arena", "active_casu", "value", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
-    with open (config.experiment_folder + "fitness.csv", 'w') as fp:
+    with open (experiment_folder + "fitness.csv", 'w') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         row = ["generation", "fitness", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
 
-def check_run (config, args):
+def check_run (args):
     run_number = args.run
     result = 'run-%03d/' % (run_number)
     if os.path.isdir (result):
-        config.experiment_folder = result
+        return result
     else:
         print "There is no run ", run_number
+        sys.exit (1)
 
-def load_population_and_evaluation (config):
-    with open (config.experiment_folder + "population.csv", "r") as fp:
+def load_population_and_evaluation (config, experiment_folder):
+    with open (experiment_folder + "population.csv", "r") as fp:
         f = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         f.next () #skip header_row
         rows = [row for row in f]
@@ -106,7 +224,7 @@ def load_population_and_evaluation (config):
         s = initial_population [-config.population_size:]
         seeds = [[int (g) for g in c] for c in s]  # I'm assuming that all genes are integers.
         fp.close ()
-    with open (config.experiment_folder + "evaluation.csv", "r") as fp:
+    with open (experiment_folder + "evaluation.csv", "r") as fp:
         f = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         f.next () #skip header_row
         eva_values = []
@@ -129,52 +247,81 @@ def fitness_save_observer (population, num_generations, num_evaluations, args):
             f.writerow (row)
         fp.close ()
 
-def run_inspyred (config, worker_zmqs, current_generation = 1, episode_index = 1, seeds = None, eva_values = None):
+def run_inspyred (config, worker_settings, experiment_folder, current_generation = 1, episode_index = 1, seeds = None, eva_values = None):
     """
     Run the Evolutionary Strategy for the given configuration.
     """
-    epsd = episode.Episode (config, worker_zmqs, episode_index)
+    epsd = episode.Episode (config, worker_settings, experiment_folder, episode_index)
     epsd.initialise ()
     es = inspyred.ec.ES (random.Random ())
-    evltr = evaluator.Evaluator (config, epsd, current_generation, eva_values)
+    evltr = evaluator.Evaluator (config, epsd, experiment_folder, current_generation, eva_values)
     es.terminator = [inspyred.ec.terminators.generation_termination]
     es.observer = [fitness_save_observer]
     if config.chromosome_type == "SinglePulseGenePause":
         es.variator = [chromosome.SinglePulseGenePause.get_variator ()]
         generator = chromosome.SinglePulseGenePause.random_generator
-        bounder = chromosome.SinglePulseGenePause.get_bounder ()
+    elif config.chromosome_type == "SinglePulseGeneFrequency":
+        es.variator = [chromosome.SinglePulseGeneFrequency.get_variator ()]
+        generator = chromosome.SinglePulseGeneFrequency.random_generator
     elif config.chromosome_type == "SinglePulseGenesPulse":
         es.variator = [chromosome.SinglePulseGenesPulse.get_variator ()]
         generator = chromosome.SinglePulseGenesPulse.random_generator
-        bounder = None
     es.evolve (
         generator = generator,
         evaluator = evltr.population_evaluator,
         pop_size = config.population_size,
-        bounder = bounder,
+        bounder = None,
         maximize = True,
         max_generations = config.number_generations,
         seeds = seeds,
-        config_experiment_folder = config.experiment_folder)
-    epsd.finish ()
+        config_experiment_folder = experiment_folder)
+    print ("\n\n* ** The End")
+    epsd.finish (True)
+    for ws in worker_settings.values ():
+        ws.terminate_session ()
     print ("Evolutionary Strategy algorithm finished!")
     
+try:
+    os.makedirs ("tmp")
+except OSError:
+    pass
 args = parse_arguments ()
+# if args.deploy:
+#     deploy_workers (args.workers, None)
+# if args.command in ['old-new-run', 'old_new_run']:
+#     cfg = config.Config ()
+#     cfg.status ()
+#     worker_zmqs = arena.connect_workers (arena.load_worker_settings (), cfg)
+#     calculate_experiment_folder_for_new_run (cfg, args)
+#     create_directories_for_experimental_run (cfg, args)
+#     create_experimental_run_files (cfg)
+#     run_inspyred (cfg, worker_zmqs)
+# elif args.command in ['old-continue-run', 'old_continue_run']:
+#     cfg = config.Config ()
+#     cfg.status ()
+#     check_run (cfg, args)
+#     current_generation, current_episode, seeds, eva_values = load_population_and_evaluation (cfg)
+#     worker_zmqs = arena.connect_workers (arena.load_worker_settings (), cfg)
+#     run_inspyred (cfg, worker_zmqs, current_generation, current_episode + 1, seeds, eva_values)
 if args.command in ['new-run', 'new_run']:
     cfg = config.Config ()
     cfg.status ()
-    worker_zmqs = arena.connect_workers (arena.load_worker_settings (), cfg)
-    calculate_experiment_folder_for_new_run (cfg, args)
-    create_directories_for_experimental_run (cfg)
-    create_experimental_run_files (cfg)
-    run_inspyred (cfg, worker_zmqs)
-elif args.command in ['continue-run', 'continue-run']:
+    worker_settings = dict ([ws.connect_to_worker (cfg) for ws in load_worker_settings (args.workers)])
+    print worker_settings
+    experiment_folder = calculate_experiment_folder_for_new_run (args)
+    create_directories_for_experimental_run (experiment_folder, args)
+    create_experimental_run_files (experiment_folder)
+    run_inspyred (cfg, worker_settings, experiment_folder)
+elif args.command in ['continue-run', 'continue_run']:
     cfg = config.Config ()
     cfg.status ()
-    check_run (cfg, args)
-    current_generation, current_episode, seeds, eva_values = load_population_and_evaluation (cfg)
-    worker_zmqs = arena.connect_workers (arena.load_worker_settings (), cfg)
-    run_inspyred (cfg, worker_zmqs, current_generation, current_episode + 1, seeds, eva_values)
+    experiment_folder = check_run (cfg, args)
+    current_generation, current_episode, seeds, eva_values = load_population_and_evaluation (cfg, experiment_folder)
+    worker_settings = dict ([ws.connect_to_worker () for ws in load_worker_settings (args.workers)])
+    print worker_settings
+    run_inspyred (cfg, worker_settings, experiment_folder, current_generation, current_episode + 1, seeds, eva_values)
+elif args.command in ['deploy']:
+    deploy_workers (args.workers, None)
 elif args.command == None:
     print ("Nothing to do!\n")
 else:

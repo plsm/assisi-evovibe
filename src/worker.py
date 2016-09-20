@@ -18,6 +18,7 @@ CASU_STATUS                  = 4
 VIBRATION_PATTERN_440_09_01  = 7
 STANDBY_CASU                 = 8
 SPREAD_BEES                  = 10
+TERMINATE                    = 31
 WORKER_OK              = 1000
 
 CASU_TEMPERATURE = 28
@@ -27,13 +28,15 @@ spreading_waiting_time = None
 frame_per_second = None
 run_vibration_model = None
 
+keep_going = True
+
 def blip_casu ():
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
     
 def cmd_initialise ():
-    if len (message) != 5:
+    if len (message) != 6:
         print ("Invalid initialisation message!\n" + str (message))
         a_casu.stop ()
         sys.exit (3)
@@ -41,57 +44,68 @@ def cmd_initialise ():
     global spreading_waiting_time
     global frame_per_second
     global run_vibration_model
-    print ("Initialisation message...")
+    print ("W%dC Initialisation message..." % casu_number)
     evaluation_run_time = message [1]
     spreading_waiting_time = message [2]
     frame_per_second = message [3]
-    if message [4] == "SinglePulseGenePause":
-        run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
-    elif message [4] == "SinglePulseGenesPulse":
-        run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
+    sound_hardware = message [4]
+    chromosome_type = message [5]
+    if sound_hardware == 'Zagreb':
+        if chromosome_type == "SinglePulseGenePause":
+            run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
+        elif chromosome_type == "SinglePulseGeneFrequency":
+            run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model
+        elif chromosome_type == "SinglePulseGenesPulse":
+            run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
+    elif sound_hardware == 'Graz':
+        run_vibration_model = None
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.diagnostic_led_standby ()
     a_casu.airflow_standby ()
     a_casu.ir_standby ()
     a_casu.speaker_standby ()
+    print ("W%dC Done!" % (casu_number))
     zmq_sock_utils.send (socket, [WORKER_OK])
 
 def cmd_active_casu ():
-    print ("Active CASU...")
+    print ("W%dC Active CASU..." % casu_number)
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
-    run_vibration_model (message [1], a_casu, evaluation_run_time)
+    if run_vibration_model is None:
+        time.sleep (evaluation_run_time) # sound hardware by Graz
+    else:
+        run_vibration_model (message [1], a_casu, evaluation_run_time)
     a_casu.speaker_standby ()
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
-    print ("Spreading...")
+    print ("W%dC Spreading..." % (casu_number))
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
-    print ("Done!")
+    print ("W%dC Done!" % (casu_number))
     zmq_sock_utils.send (socket, [WORKER_OK])
 
 def cmd_passive_casu ():
-    print ("Passive CASU...")
+    print ("W%dC Passive CASU..." % casu_number)
     time.sleep (2.0 / frame_per_second)
     time.sleep (evaluation_run_time)
     a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
-    print ("Spreading...")
+    print ("W%dC Spreading..." % (casu_number))
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
-    print ("Done!")
+    print ("W%dC Done!" % (casu_number))
     zmq_sock_utils.send (socket, [WORKER_OK])
 
 def cmd_vibration_pattern_440_09_01 ():
-    print ("Running vibration pattern: frequency 440Hz, duration 0.9s, pause 0.1s")
+    print ("W%dC Running vibration pattern: frequency 440Hz, duration 0.9s, pause 0.1s" % (casu_number))
     number_repeats = message [1]
     for n in xrange (number_repeats):
-        print ("Repeat #%d" % (n + 1))
+        print ("W%dC Repeat #%d" % (casu_number, n + 1))
         blip_casu ()
         vibe_periods = [900,  100]
         vibe_freqs   = [440,    1]
@@ -101,28 +115,42 @@ def cmd_vibration_pattern_440_09_01 ():
         blip_casu ()
         a_casu.speaker_standby ()
         time.sleep (spreading_waiting_time)
+    print ("W%dC Done!" % (casu_number))
     zmq_sock_utils.send (socket, [WORKER_OK])
 
 def cmd_standby_casu ():
-    print ("Putting CASU in standby")
+    print ("W%dC Putting CASU in standby" % (casu_number))
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.diagnostic_led_standby ()
     a_casu.airflow_standby ()
     a_casu.ir_standby ()
     a_casu.speaker_standby ()
+    print ("W%dC Done!" % (casu_number))
     zmq_sock_utils.send (socket, [WORKER_OK])
 
 def cmd_spread_bees ():
-    print ("Spreading bees...")
+    print ("W%dC Spreading bees..." % (casu_number))
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.set_airflow_intensity (1)
     time.sleep (message [1])
     a_casu.airflow_standby ()
-    print ("Done!")
+    print ("W%dC Done!" % (casu_number))
     zmq_sock_utils.send (socket, [WORKER_OK])
 
-def signal_handler (signal, frame):
-    print ('You pressed Ctrl+C!')
+def cmd_terminate ():
+    global keep_going
+    print ("W%dC Terminating..." % (casu_number))
+    a_casu.airflow_standby () # this is not done by casu.stop()
+    a_casu.stop ()
+    keep_going = False
+    print ("W%dC Done!" % (casu_number))
+    zmq_sock_utils.send (socket, [WORKER_OK])
+
+def signal_handler (signum, frame):
+    if signum == signal.SIGINT:
+        print ('W%dC You pressed Ctrl+C!' % (casu_number))
+    else:
+        print ("W%dC Received signal number %d!" % (casu_number, signum))
     a_casu.airflow_standby () # this is not done by casu.stop()
     a_casu.stop ()
     sys.exit (0)
@@ -130,18 +158,19 @@ def signal_handler (signal, frame):
 if __name__ == '__main__':
 
     # parse arguments
-    if len (sys.argv) != 3:
-        print ('Missing number!\nUsage:\npython worker.py CASU_NUMBER ZMQ_ADDRESS\n')
+    usage = 'Usage:\npython worker.py RTC_FILENAME CASU_NUMBER ZMQ_ADDRESS\n'
+    if len (sys.argv) != 4:
+        print ('Invalid number of options!\n' + usage)
         sys.exit (1)
-    zmq_address = sys.argv [2]
+    zmq_address = sys.argv [3]
     try:
-        casu_number = int (sys.argv [1])
+        casu_number = int (sys.argv [2])
     except:
-        print ('Option is not a number!\nUsage:\npython worker.py CASU_NUMBER\n')
+        print ('Option is not a number!\n' + usage)
         sys.exit (1)
 
     # connect to CASU
-    rtc_file_name = 'casu-%03d.rtc' % (casu_number)
+    rtc_file_name = sys.argv [1]
     try:
         a_casu = casu.Casu (
             rtc_file_name = rtc_file_name,
@@ -165,12 +194,15 @@ if __name__ == '__main__':
     
     # install signal handler to exit worker gracefully
     signal.signal (signal.SIGINT, signal_handler)
+    signal.signal (signal.SIGTERM, signal_handler)
+    signal.signal (signal.SIGQUIT, signal_handler)
+    signal.signal (signal.SIGHUP, signal_handler)
 
     # main loop
-    print ("Entering main loop.")
-    while True:
+    print ("W%dC Entering main loop." % (casu_number))
+    while keep_going:
         message = zmq_sock_utils.recv (socket)
-        print ("Received request: %s" % str (message))
+        print ("W%dC Received request: %s" % (casu_number, str (message)))
         command = message [0]
         if command == INITIALISE:
             cmd_initialise ()
@@ -179,7 +211,7 @@ if __name__ == '__main__':
         elif command == PASSIVE_CASU:
             cmd_passive_casu ()
         elif command == CASU_STATUS:
-            print (a_casu.get_temp (casu.ARRAY))
+            print ("W%dC temperature readins: %s" % (casu_number, str (a_casu.get_temp (casu.ARRAY))))
             zmq_sock_utils.send (socket, a_casu.get_temp (casu.TEMP_WAX))
         elif command == VIBRATION_PATTERN_440_09_01:
             cmd_vibration_pattern_440_09_01 ()
@@ -187,5 +219,7 @@ if __name__ == '__main__':
             cmd_standby_casu ()
         elif command == SPREAD_BEES:
             cmd_spread_bees ()
+        elif command == TERMINATE:
+            cmd_terminate ()
         else:
-            print ("Unknown command:\n%s" % (str (message)))
+            print ("W%dC Unknown command:\n%s" % (casu_number, str (message)))

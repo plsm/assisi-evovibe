@@ -29,43 +29,9 @@ It can be used to convert between image formats as well as resize an
 image, blur, crop, despeckle, dither, draw on, flip, join, re-sample,
 and much more.
 """
-COMPARE_BIN_FILENAME = find_app ("convert")
+COMPARE_BIN_FILENAME = find_app ("compare")
 
-def load_worker_settings ():
-    """
-    Load the file with the worker setings, namely the CASU they represent and the address where they listen for commands.
-    """
-    file_object = open ('workers', 'r')
-    dictionary = yaml.load (file_object)
-    file_object.close ()
-    result = []
-    number_workers = dictionary ['number_workers']
-    for index in xrange (1, number_workers + 1):
-        worker_key = 'worker-%03d' % (index)
-        casu_number = dictionary [worker_key]['casu_number']
-        worker_address = dictionary [worker_key]['address']
-        result.append ((casu_number, worker_address))
-    #print result
-    return result
-
-def connect_workers (worker_settings, config):
-    """
-    Given a list with worker settings, connect to them and return a list with the CASU they represent and the ZMQ socket where they listen for commands.
-    """
-    result = {}
-    context = zmq.Context ()
-    for (casu_number, worker_address) in worker_settings:
-        print ("Connecting to worker at %s responsible for casu #%d..." % (worker_address, casu_number))
-        socket = context.socket (zmq.REQ)
-        socket.connect (worker_address)
-        result [casu_number] = socket
-        print ("Initializing worker responsible for casu #%d..." % (casu_number))
-        answer = zmq_sock_utils.send_recv (socket, [worker.INITIALISE, config.evaluation_run_time, config.spreading_waiting_time, config.frame_per_second, config.chromosome_type])
-        print ("Worker responded with: %s" % (str (answer)))
-    #print result
-    return result
-
-def ask_casu_number (name, worker_zmqs):
+def ask_casu_number (name, worker_settings):
     """
     Ask the user the CASU number of a CASU with the given name relative to the background image.
     Returns a tuple with the casu number and the zmq socket.
@@ -73,8 +39,12 @@ def ask_casu_number (name, worker_zmqs):
     while True:
         try:
             number = int (raw_input ("Number of %s CASU? " % name))
-            if number in worker_zmqs:
-                return (number, worker_zmqs [number])
+            if number in worker_settings:
+                if worker_settings [number].in_use:
+                    print ("This CASU is already chosen!")
+                else:
+                    worker_settings [number].in_use = True
+                    return (number, worker_settings [number].socket)
             else:
                 print ("There is no worker associated with CASU number %d." % (number))
         except ValueError:
@@ -82,29 +52,19 @@ def ask_casu_number (name, worker_zmqs):
 
 class AbstractArena:
     """
-    This class represents an abstract arena.  The attributes of this class represent the ZMQ sockets where the worker programs are listening for commands.
+    This class represents an abstract arena.  The attributes of this class represent the ZMQ sockets
+    where the worker programs are listening for commands.
     """
-    def __init__ (self, worker_zmqs, casu_names, episode_path, img_path, index):
+    def __init__ (self, worker_settings, casu_names, episode_path, img_path, index, config):
         """
         Ask the user the CASUs that are this arena, and the position of the arena in the background image.
         """
-        self.workers = [ask_casu_number (name, worker_zmqs) for name in casu_names]
-        ok = False
-        while not ok:
-            try:
-                self.arena_left = int (raw_input ("Leftmost (min) pixel of the arena? "))
-                self.arena_right = int (raw_input ("Rightmost (max) pixel of the arena? "))
-                self.arena_top = int (raw_input ("Topmost (min) pixel of the arena? "))
-                self.arena_bottom = int (raw_input ("Bottommost (max) pixel of the arena? "))
-                if self.arena_left > self.arena_right or self.arena_top > self.arena_bottom:
-                    print ("Invalid pixel data!")
-                else:
-                    ok = True
-            except ValueError:
-                print ("Not a number!")
+        self.workers = [ask_casu_number (name, worker_settings) for name in casu_names]
         self.episode_path = episode_path
         self.img_path = img_path
         self.index = index
+        self.same_colour_threshold = '%d%%' % (config.same_colour_threshold)
+        self.delta_image = int (config.frame_per_second / config.interval_current_previous_frame)
 
     def status (self):
         """
@@ -120,6 +80,11 @@ class AbstractArena:
                 good = False
             else:
                 value += worker.CASU_TEMPERATURE + 1 - temperature
+        if good:
+            for i1 in xrange (len (self.workers) - 1):
+                for i2 in xrange (1, len (self.workers)):
+                    if math.abs (temps [i1] - temps [i2]) > MAXIMUM_TEMPERATURE_DIFFERENCE:
+                        good = False
         if not good:
             value = 0
         return (value, temps)
@@ -138,12 +103,14 @@ class AbstractArena:
                 zmq_sock_utils.send (socket, [worker.ACTIVE_CASU, chromosome])
             else:
                 zmq_sock_utils.send (socket, [worker.PASSIVE_CASU])
-        for i in xrange (len (self.workers)):
-            (number, socket) = self.workers [i]
+        if config.sound_hardware == 'Graz':
+            time.sleep (2.0 / config.frame_per_second)
+            config.run_vibration_model (chromosome, self.selected_worker_index, config.evaluation_run_time)
+        for (number, socket) in self.workers:
             answer = zmq_sock_utils.recv (socket)
             print ("Worker responsible for casu #%d responded with: %s" % (number, str (answer)))
 
-    def __compare_image (self, mask, image1, image2):
+    def __compare_image_thomas (self, mask, image1, image2):
         """
         Compare two images using the convert program developed by Thomas Schmickl.  This program computes the pixel count difference between two images in a region of interest.
         """
@@ -160,7 +127,7 @@ class AbstractArena:
             '-print', '%[fx:w*h*mean]',
             'null:'
             ]
-        import functools
+        #import functools
         #print "Running", functools.reduce (lambda x, y: x + " " + y, command)
         process = subprocess.Popen (command, stdout=subprocess.PIPE)
         out, _ = process.communicate ()
@@ -169,7 +136,7 @@ class AbstractArena:
         
     def __compare_image_plsm (self, mask, image1, image2):
         """
-        Compare two images using the convert program developed by Thomas Schmickl.  This program computes the pixel count difference between two images in a region of interest.
+        Compare two images using the convert program from the ImageMagick suite.  This program computes the pixel count difference between two images in a region of interest.
         """
         command = [
             CONVERT_BIN_FILENAME,
@@ -177,22 +144,9 @@ class AbstractArena:
             '(', mask, image2, '-compose', 'multiply', '-composite', ')',
             '-metric', 'AE', '-fuzz', '25%', '-compare',
             '-format', '%[distortion]', 'info:'
-        #   'tmp/image.jpg'
             ]
-        #process = subprocess.Popen (command)
-        #process.wait ()
-        #command = [
-        #    COMPARE_BIN_FILENAME,
-        #    'tmp/image-1.jpg', 'tmp/image-0.jpg',
-        #    '-metric', 'AE', '-fuzz', '25%', '-format', '%[distortion]', 'info:'
-        #    ]
         process = subprocess.Popen (command, stdout=subprocess.PIPE)
         out, err = process.communicate ()
-        #print out
-        #print err
-        #import functools
-        #print "Running", functools.reduce (lambda x, y: x + " " + y, command)
-        #raw_input ("PRess ENTER to continue with debuggin")
         try:
             value = float (out)
         except:
@@ -210,51 +164,14 @@ class AbstractArena:
             image1 = self.episode_path + 'Background.jpg'
             image2 = "tmp/iteration-image-%04d.jpg" % (ith_image)
             result.append (self.__compare_image_plsm (mask, image1, image2))
-            if ith_image > 1:
+            if ith_image > self.delta_image:
                 mask = "%sMask-%d.jpg" % (self.img_path, index)
                 image1 = "tmp/iteration-image-%04d.jpg" % ith_image
-                image2 = "tmp/iteration-image-%04d.jpg" % (ith_image - 1)
+                image2 = "tmp/iteration-image-%04d.jpg" % (ith_image - self.delta_image)
                 result.append (self.__compare_image_plsm (mask, image1, image2))
             else:
                 result.append (-1)
         return result
-
-    def compare_images_x (self, ith_image):
-        background_data = Image.open (self.episode_path + 'Background.jpg').getdata ()
-        curr_image_data = Image.open ("tmp/iteration-image-%04d.jpg" % ith_image).getdata ()
-        (back_cur_top, back_cur_bot) = self.compare_jpg_files (background_data, curr_image_data)
-        if ith_image > 1:
-            prev_image_data = Image.open ("tmp/iteration-image-%04d.jpg" % (ith_image - 1)).getdata ()
-            (cur_prev_top, cur_prev_bot) = self.compare_jpg_files (curr_image_data, prev_image_data)
-        else:
-            (cur_prev_top, cur_prev_bot) = (-1, -1)
-        return [back_cur_top, cur_prev_top, back_cur_bot, cur_prev_bot]
-
-    def compare_jpg_files (self, jpgfile_data1, jpgfile_data2):
-        """
-        Compute how many bees are moving aroung the active and passive CASUs.
-
-        Both parameters should be iteration step images.
-
-        Only pixels that are different are taken into account.
-        """
-        top_area = 0
-        bot_area = 0
-        for x in xrange (self.arena_left, self.arena_right + 1, 1):
-            for y in xrange (self.arena_top, self.arena_bottom + 1, 1):
-                index = x + y * 600
-                pixel1 = jpgfile_data1 [index]
-                pixel2 = jpgfile_data2 [index]
-                # gray image
-                if abs (pixel1 [0] - pixel2 [0]) >= 30:
-                    different_pixel = 1
-                else:
-                    different_pixel = 0
-                if y < self.arena_border_coordinate:
-                    top_area += different_pixel
-                else:
-                    bot_area += different_pixel
-        return (top_area, bot_area)
         
     def x__write_properties (self, fp):
         fp.write ("""arena_left : %d
@@ -270,19 +187,29 @@ class StadiumBorderArena (AbstractArena):
     """
     An arena with two CASUs (top and bottom), stadium shape, and rectangular region of interest.
     """
-    def __init__ (self, worker_zmqs, episode_path, img_path, index):
+    def __init__ (self, worker_settings, episode_path, img_path, index, config):
         """
         Ask the user the position of the arena border in the background image.
         """
-        AbstractArena.__init__ (self, worker_zmqs, ["top", "bottom"], episode_path, img_path, index)
+        AbstractArena.__init__ (self, worker_settings, ["top", "bottom"], episode_path, img_path, index, config)
         ok = False
         while not ok:
             try:
+                self.arena_left = int (raw_input ("Leftmost (min) pixel of the arena? "))
+                self.arena_right = int (raw_input ("Rightmost (max) pixel of the arena? "))
+                if self.arena_left > self.arena_right:
+                    print ("Invalid pixel data!")
+                    continue
+                self.arena_top = int (raw_input ("Topmost (min) pixel of the arena? "))
+                self.arena_bottom = int (raw_input ("Bottommost (max) pixel of the arena? "))
+                if self.arena_top > self.arena_bottom:
+                    print ("Invalid pixel data!")
+                    continue
                 self.arena_border_coordinate = int (raw_input ("Vertical coordinate of the border? "))
-                if self.arena_top < self.arena_border_coordinate < self.arena_bottom:
-                    ok = True
-                else:
+                if not (self.arena_top < self.arena_border_coordinate < self.arena_bottom):
                     print ("Invalid border position!")
+                    continue
+                ok = True
             except ValueError:
                 print ("Not a number!")
                     
@@ -360,6 +287,79 @@ class StadiumBorderArena (AbstractArena):
 """ % (self.arena_border_coordinate))
         fp.close ()
 
+
+class CircularArena (AbstractArena):
+    """
+    A circular arena with a single casu.  Region of interest is circular
+    """
+    def __init__ (self, worker_settings, episode_path, img_path, index, config):
+        """
+        Ask the user the position of the arena, of the casu, and of the region of interest.
+        """
+        AbstractArena.__init__ (self, worker_settings, ["center"], episode_path, img_path, index, config)
+        ok = False
+        while not ok:
+            try:
+                self.arena_center_x = int (raw_input ("Horizontal coordinate of the arena center? "))
+                self.arena_center_y = int (raw_input ("Vertical coordinate of the arena center? "))
+                self.arena_radius = int (raw_input ("Radius of the arena? "))
+                if 0 <= self.arena_center_x - self.arena_radius < self.arena_center_x + self.arena_radius < config.image_width \
+                    and 0 <= self.arena_center_y - self.arena_radius < self.arena_center_y + self.arena_radius < config.image_height:
+                    ok = True
+                else:
+                    print ("Invalid arena position!")
+            except ValueError:
+                print ("Not a number!")
+
+    def create_region_of_interests_image (self):
+        subprocess.check_call ([
+            CONVERT_BIN_FILENAME,
+            self.episode_path + 'Background.jpg',
+            '-fill', '#FFFF007F',
+            '-draw', 'circle %d,%d %d,%d' % (self.arena_center_x, self.arena_center_y, self.arena_center_x, self.arena_center_y + self.arena_radius), 
+            self.img_path + 'Region-of-Interests.jpg'])
+
+    def create_mask_images_casu_images (self, config):
+        subprocess.check_call ([
+            CONVERT_BIN_FILENAME,
+            '-size', '%dx%d' % (config.image_width, config.image_height),
+            'xc:black',
+            '-fill', '#FFFFFF',
+            '-draw', 'circle %d,%d %d,%d' % (self.arena_center_x, self.arena_center_y, self.arena_center_x, self.arena_center_y + self.arena_radius), 
+            self.img_path + 'Mask-0.jpg'])
+            
+    def write_properties (self):
+        """
+        Save the arena properties for later reference.
+        """
+        fp = open (self.img_path + "properties", 'w')
+        fp.write ("""arena_center_x : %d
+arena_center_y : %d
+arena_radius : %d
+""" % (self.arena_center_x,
+       self.arena_center_y,
+       self.arena_radius))
+        fp.close ()
+
+
+if __name__ == '__main__':
+    import worker_settings
+    lws = worker_settings.load_worker_settings ('workers')
+    for ws in lws:
+        print ws
+    import new_config
+    cfg = new_config.Config ()
+    dws = dict ([(ws.casu_number, ws) for ws in lws])
+    ca = CircularArena (dws, "/tmp/assisi/", "/tmp/assisi/", 1, cfg)
+    ca.create_region_of_interests_image ()
+    ca.create_mask_images_casu_images (cfg)
+    for ws in lws:
+        ws.in_use = False
+    raw_input ("Check the images and press ENTER")
+    sba = StadiumBorderArena (dws, "/tmp/assisi/", "/tmp/assisi/", 1, cfg)
+    sba.create_region_of_interests_image ()
+    sba.create_mask_images_casu_images (cfg)
+    
 # devemos ter uma arena onde consideramos uma ROI centrada em torno do CASU como estava na implementação inicial? 
 # devemos analisar os videos ovtidos no meu último dia em Graz para determinar a que distância param as abelhas?
 # a distância a que param as abelhas deve ser um parâmetro da configuração? Quando estou a perguntar as propriedades das arenas, pergunto também a escala da arena? A escala da imagem é uma constante global, que é perguntada no início da experiência.

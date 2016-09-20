@@ -6,18 +6,55 @@
 # Ziad Salem
 # Payam Zahadat
 
-#from assisipy import casu
+import assisipy.casu
 
 import random
 import time
 import copy
+import math
+
+# vibration frequency domain
+MIN_FREQUENCY = 300
+MAX_FREQUENCY = 1500  # assisipy.casu.VIBE_FREQ_MAX
+STEP_FREQUENCY = 10
+STDDEV_FREQUENCY = (MAX_FREQUENCY - MIN_FREQUENCY) / 10.0
+# only for geometric perturbation # SUCCESS_FREQUENCY = 1.0 / (((MAX_FREQUENCY - MIN_FREQUENCY) // STEP_FREQUENCY + 1) / 10 + 1.0)
+
+# vibration period domain, pause period domain
+MIN_PERIOD = 100  # assisipy.casu.VIBE_PERIOD_MIN
+MAX_PERIOD = 1000
+STEP_PERIOD = 10
+STDDEV_PERIOD = 300 # (MAX_PERIOD - MIN_PERIOD) / 10.0
+# only for geometric perturbation # SUCCESS_PERIOD = 1.0 / (((MAX_PERIOD - MIN_PERIOD) // STEP_PERIOD + 1) / 10 + 1.0)
+
+# vibration intensity domain
+MIN_INTENSITY = 5
+STEP_INTENSITY = 5
+MAX_INTENSITY = 50 # assisipy.casu.VIBE_AMP_MAX
+STDDEV_INTENSITY = 10
 
 BITRATE = 16
+
+def geometric_perturbation (prng, current_value, min_value, max_value, step_value, success):
+    change = 0
+    while prng.random () >= success:
+        change += step_value
+    if prng.random () < 0.5:
+        change = -change
+    return ((current_value + change - min_value) % (max_value - min_value)) + min_value
+
+def gaussian_perturbation (prng, current_value, min_value, max_value, step_value, stddev):
+    change = prng.gauss (0, stddev)
+    new_value = int (round (current_value + change))
+    remainder = (new_value - min_value) % step_value
+    new_value += -remainder + (step_value if 2 * remainder >= step_value > 1 else 0)
+    new_value = (new_value - min_value) % (max_value - min_value + step_value) + min_value
+    return new_value
 
 class AbstractChromosome:
     """
     All chromosomes used by the incremental evolution algorithm must have the following set of static methods:
-    run_vibration_model (chromosome, casu, evaluation_runtime)
+    run_vibration_model (chromosome, casu, evaluation_run_time)
     random_generator (random, args)
     """
     pass
@@ -27,22 +64,17 @@ class SinglePulseGenePause (AbstractChromosome):
     """
     This chromosome contains one gene that represents the pause time.  The vibration frequency is 440 Hz.  The vibration duration is 1 second.
     """
-    MIN_PAUSE_PERIOD = 100 #assisipy.casu.VIBE_PERIOD_MIN
-    MAX_PAUSE_PERIOD = 1000
-    STEP_PAUSE_PERIOD = 10
-    STDDEV_PAUSE_PERIOD = 300
-
     VIBRATION_FREQUENCY = 440
     VIBRATION_PERIOD = 1000
     VIBRATION_INTENSITY = 50
 
     @staticmethod
-    def run_vibration_model (chromosome, bocasu, evaluation_runtime):
+    def run_vibration_model (chromosome, the_casu, evaluation_run_time):
         """
         Run the vibration model represented by the given SinglePulseGenePause chromosome.
         """
         pause_period = chromosome [0]
-        if pause_period < casu.VIBE_PERIOD_MIN:
+        if pause_period < assisipy.casu.VIBE_PERIOD_MIN:
             vibe_periods = [SinglePulseGenePause.VIBRATION_PERIOD]
             vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY]
             vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY]
@@ -50,20 +82,18 @@ class SinglePulseGenePause (AbstractChromosome):
             vibe_periods = [SinglePulseGenePause.VIBRATION_PERIOD,    pause_period]
             vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY,            1]
             vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY,            0]
-        bocasu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
-        time.sleep (evaluation_runtime)
-        bocasu.speaker_standby ()
+        the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
+        time.sleep (evaluation_run_time)
+        the_casu.speaker_standby ()
 
     @staticmethod
-    def run_vibration_model_v2 (chromosome, evaluation_runtime):
-        import math
-        import pyaudio #pyaudio is available via pip
-        import wave
+    def run_vibration_model_v2 (chromosome, index, evaluation_run_time):
+        import pyaudio # beagle bones do not need this
         data = ''
         freq = SinglePulseGenePause.VIBRATION_FREQUENCY  #Hz, Frequency
         v_length = SinglePulseGenePause.VIBRATION_PERIOD #Milliseconds of the active part of the vibration pattern
-        p_length = chromosome [0]                        #Milliseconds of the pause phase of the vibration pattern
-        t_length = evaluation_runtime                    #Seconds of the total length of the vibration pattern. Accuracy ~1Sec
+        p_length = chromosome [0] if chromosome [0] >= assisipy.casu.VIBE_PERIOD_MIN else 0 #Milliseconds of the pause phase of the vibration pattern
+        t_length = evaluation_run_time                    #Seconds of the total length of the vibration pattern. Accuracy ~1Sec
         for i in xrange((int(float(t_length) / ((v_length + p_length) / 1000.0)))):
             for x in xrange(int(BITRATE * v_length)):
                 data = data+chr(int(math.sin(x/(((1000 * BITRATE)/(freq))/(math.pi*2)))*127+ 128))
@@ -84,76 +114,135 @@ class SinglePulseGenePause (AbstractChromosome):
         Return a random instance of a simple SinglePulseGenePause chromosome.
         This method is used as a generator by the evolutionary algorithm.
         """
-        pause_period = random.randrange (SinglePulseGenePause.MIN_PAUSE_PERIOD, SinglePulseGenePause.MAX_PAUSE_PERIOD + 1, SinglePulseGenePause.STEP_PAUSE_PERIOD)
+        pause_period = random.randrange (MIN_PERIOD, MAX_PERIOD + 1, STEP_PERIOD)
         return [pause_period]
-
-
-    @staticmethod
-    def get_bounder ():
-        from inspyred import ec
-        r = range (SinglePulseGenePause.MIN_PAUSE_PERIOD, SinglePulseGenePause.MAX_PAUSE_PERIOD + 1, SinglePulseGenePause.STEP_PAUSE_PERIOD)
-        return ec.DiscreteBounder (r)
 
     @staticmethod
     def get_variator ():
         import inspyred
         @inspyred.ec.variators.mutator
-        def variator (random, candidate, args):
-            result = int (candidate [0] + random.gauss (0, SinglePulseGenePause.STDDEV_PAUSE_PERIOD))
-            result = result - (result % SinglePulseGenePause.STEP_PAUSE_PERIOD)
-            result =  max (SinglePulseGenePause.MIN_PAUSE_PERIOD - SinglePulseGenePause.STEP_PAUSE_PERIOD, min (result, SinglePulseGenePause.MAX_PAUSE_PERIOD))
-            return [result, 0]
+        def variator (random, candidate, args = None):
+            result = copy.copy (candidate)
+            new_gene = gaussian_perturbation (random, candidate [0], MIN_PERIOD - STEP_PERIOD, MAX_PERIOD, STEP_PERIOD, STDDEV_PERIOD)
+            result [0] = new_gene
+            return result
         return variator
 
 
-def geometric_perturbation (random, success):
-    result = 0
-    while random.random () > success:
-        result += 1
-    if random.random () < 0.5:
-        return result
-    else:
-        return -result
+class SinglePulseGeneFrequency (AbstractChromosome):
+    """
+    This chromosome contains one gene that represents the vibration frequency.
+    The vibration period is 1s.  The pause duration is 0.1 second.
+    """
 
+    VIBRATION_PERIOD = 900
+    VIBRATION_INTENSITY = 50
+    PAUSE_PERIOD = 100
 
-from assisipy import casu
+    @staticmethod
+    def run_vibration_model (chromosome, the_casu, evaluation_run_time):
+        """
+        Run the vibration model represented by the given SinglePulseGeneFrequency chromosome.
+        """
+        vibration_frequency = chromosome [0]
+        vibe_periods = [SinglePulseGeneFrequency.VIBRATION_PERIOD,    SinglePulseGeneFrequency.PAUSE_PERIOD]
+        vibe_freqs   = [vibration_frequency,                          1]
+        vibe_amps    = [SinglePulseGeneFrequency.VIBRATION_INTENSITY, 0]
+        the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
+        time.sleep (evaluation_run_time)
+        the_casu.speaker_standby ()
+
+    @staticmethod
+    def run_vibration_model_v2 (chromosome, index, evaluation_run_time):
+        import pyaudio # beagle bones do not need this
+        data = ''
+        freq = chromosome [0]                                #Hz, Frequency
+        v_length = SinglePulseGeneFrequency.VIBRATION_PERIOD #Milliseconds of the active part of the vibration pattern
+        p_length = SinglePulseGeneFrequency.PAUSE_PERIOD     #Milliseconds of the pause phase of the vibration pattern
+        t_length = evaluation_run_time                        #Seconds of the total length of the vibration pattern. Accuracy ~1Sec
+        for i in xrange((int(float(t_length) / ((v_length + p_length) / 1000.0)))):
+            for x in xrange(int(BITRATE * v_length)):
+                data = data+chr(int(math.sin(x/(((1000 * BITRATE)/(freq))/(math.pi*2)))*127+ 128))
+            for x in xrange(int(BITRATE * p_length)):
+                data = data+chr(128)
+        stream = pyaudio.PyAudio().open(format = pyaudio.PyAudio().get_format_from_width(1),
+                                        channels = 1,
+                                        rate = 1000 * BITRATE,
+                                        output = True)
+        stream.write(data)
+        stream.stop_stream()
+        stream.close()
+        pyaudio.PyAudio().terminate()
+
+    @staticmethod
+    def random_generator (random, args = None):
+        """
+        Return a random instance of a simple SinglePulseGeneFrequency chromosome.
+        This method is used as a generator by the evolutionary algorithm.
+        """
+        frequency = random.randrange (MIN_FREQUENCY, MAX_FREQUENCY + 1,  STEP_FREQUENCY)
+        return [frequency]
+
+    @staticmethod
+    def get_variator ():
+        import inspyred
+        @inspyred.ec.variators.mutator
+        def variator (random, candidate, args = None):
+            result = copy.copy (candidate)
+            new_gene = gaussian_perturbation (random, candidate [0], MIN_FREQUENCY, MAX_FREQUENCY, STEP_FREQUENCY, STDDEV_FREQUENCY)
+            result [0] = new_gene
+            return result
+        return variator
+
 
 class SinglePulseGenesPulse (AbstractChromosome):
     """
     This chromosome contains three genes that represent the pulse frequency, duration time and pause time.
     """
-    MIN_FREQUENCY = 300
-    MAX_FREQUENCY = 1500  # assisipy.casu.VIBE_FREQ_MAX
-    STEP_FREQUENCY = 10
-    SUCCESS_PERIOD = 1 / 60.0
-    
-    STEP_PERIOD = 10
-    MIN_PERIOD = casu.VIBE_PERIOD_MIN
-    MAX_PERIOD = 1000
-    SUCCESS_FREQUENCY = 1.0 / 30
-
     VIBRATION_INTENSITY = 50
 
     @staticmethod
-    def run_vibration_model (chromosome, bocasu, evaluation_runtime):
+    def run_vibration_model (chromosome, the_casu, evaluation_run_time):
         """
         Run the vibration model represented by the given SinglePulseGenesPulse chromosome.
         """
-        from assisipy import casu #?!
         frequency       = chromosome [0]
         duration_period = chromosome [1]
         pause_period    = chromosome [2]
-        if pause_period < casu.VIBE_PERIOD_MIN:
+        intensity       = chromosome [3]
+        if pause_period < assisipy.casu.VIBE_PERIOD_MIN:
             vibe_periods = [duration_period]
             vibe_freqs   = [frequency]
-            vibe_amps    = [SinglePulseGenesPulse.VIBRATION_INTENSITY]
+            vibe_amps    = [intensity]
         else:
-            vibe_periods = [duration_period,                           pause_period]
-            vibe_freqs   = [frequency,                                            1]
-            vibe_amps    = [SinglePulseGenesPulse.VIBRATION_INTENSITY,            0]
-        bocasu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
-        time.sleep (evaluation_runtime)
-        bocasu.speaker_standby ()
+            vibe_periods = [duration_period,  pause_period]
+            vibe_freqs   = [frequency,        1]
+            vibe_amps    = [intensity,        0]
+        the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
+        time.sleep (evaluation_run_time)
+        the_casu.speaker_standby ()
+
+    @staticmethod
+    def run_vibration_model_v2 (chromosome, index, evaluation_run_time):
+        import pyaudio # beagle bones do not need this
+        data = ''
+        freq = chromosome [0]         #Hz, Frequency
+        v_length = chromosome [1]     #Milliseconds of the active part of the vibration pattern
+        p_length = chromosome [2] if chromosome [2] >= assisipy.casu.VIBE_PERIOD_MIN else 0    #Milliseconds of the pause phase of the vibration pattern
+        t_length = evaluation_run_time #Seconds of the total length of the vibration pattern. Accuracy ~1Sec
+        for i in xrange((int(float(t_length) / ((v_length + p_length) / 1000.0)))):
+            for x in xrange(int(BITRATE * v_length)):
+                data = data+chr(int(math.sin(x/(((1000 * BITRATE)/(freq))/(math.pi*2)))*127+ 128))
+            for x in xrange(int(BITRATE * p_length)):
+                data = data+chr(128)
+        stream = pyaudio.PyAudio().open(format = pyaudio.PyAudio().get_format_from_width(1),
+                                        channels = 1,
+                                        rate = 1000 * BITRATE,
+                                        output = True)
+        stream.write(data)
+        stream.stop_stream()
+        stream.close()
+        pyaudio.PyAudio().terminate()
 
     @staticmethod
     def random_generator (random, args = None):
@@ -161,27 +250,31 @@ class SinglePulseGenesPulse (AbstractChromosome):
         Return a random instance of a simple SinglePulseGenesPulse chromosome.
         This method is used as a generator by the evolutionary algorithm.
         """
-        frequency       = random.randrange (SinglePulseGenesPulse.MIN_FREQUENCY, SinglePulseGenesPulse.MAX_FREQUENCY,  SinglePulseGenesPulse.STEP_FREQUENCY)
-        duration_period = random.randrange (SinglePulseGenesPulse.MIN_PERIOD,    SinglePulseGenesPulse.MAX_PERIOD + 1, SinglePulseGenesPulse.STEP_PERIOD)
-        pause_period    = random.randrange (SinglePulseGenesPulse.MIN_PERIOD,    SinglePulseGenesPulse.MAX_PERIOD + 1, SinglePulseGenesPulse.STEP_PERIOD)
-        return [frequency, duration_period, pause_period]
+        frequency       = random.randrange (MIN_FREQUENCY, MAX_FREQUENCY + 1,  STEP_FREQUENCY)
+        duration_period = random.randrange (MIN_PERIOD,    MAX_PERIOD + 1,     STEP_PERIOD)
+        pause_period    = random.randrange (MIN_PERIOD,    MAX_PERIOD + 1,     STEP_PERIOD)
+        intensity       = random.randrange (MIN_INTENSITY, MAX_INTENSITY + 1,  STEP_INTENSITY)
+        return [frequency, duration_period, pause_period, intensity]
 
     @staticmethod
     def get_variator ():
         import inspyred
         @inspyred.ec.variators.mutator
-        def variator (random, candidate, args):
+        def variator (random, candidate, args = None):
             result = copy.copy (candidate)
             gene_index = random.randrange (3)
             if gene_index == 0:
-                new_gene = result [0] + SinglePulseGenesPulse.STEP_FREQUENCY * geometric_perturbation (random, SinglePulseGenesPulse.SUCCESS_FREQUENCY)
-                result [0] = max (SinglePulseGenesPulse.MIN_FREQUENCY, min (new_gene, SinglePulseGenesPulse.MAX_FREQUENCY))
+                new_gene = gaussian_perturbation (random, candidate [0], MIN_FREQUENCY, MAX_FREQUENCY, STEP_FREQUENCY, STDDEV_FREQUENCY)
+                result [0] = new_gene
             elif gene_index == 1:
-                new_gene = result [1] + SinglePulseGenesPulse.STEP_PERIOD * geometric_perturbation (random, SinglePulseGenesPulse.SUCCESS_PERIOD)
-                result [1] = max (SinglePulseGenesPulse.MIN_PERIOD, min (new_gene, SinglePulseGenesPulse.MAX_PERIOD))
-            else:
-                new_gene = result [2] + SinglePulseGenesPulse.STEP_PERIOD * geometric_perturbation (random, SinglePulseGenesPulse.SUCCESS_PERIOD)
-                result [2] = max (SinglePulseGenesPulse.MIN_PERIOD - SinglePulseGenesPulse.STEP_PERIOD, min (new_gene, SinglePulseGenesPulse.MAX_PERIOD))
+                new_gene = gaussian_perturbation (random, candidate [1], MIN_PERIOD, MAX_PERIOD, STEP_PERIOD, STDDEV_PERIOD)
+                result [1] = new_gene
+            elif gene_index == 3:
+                new_gene = gaussian_perturbation (random, candidate [2], MIN_PERIOD - STEP_PERIOD, MAX_PERIOD, STEP_PERIOD, STDDEV_PERIOD)
+                result [2] = new_gene
+            elif gene_index == 3:
+                new_gene = gaussian_perturbation (random, candidate [3], MIN_INTENSITY, MAX_INTENSITY, STEP_INTENSITY, STDDEV_INTENSITY)
+                result [3] = new_gene
             return result
         return variator
 

@@ -34,9 +34,10 @@ class Evaluator:
 
     :param config: A Python object with the following attributes
     """
-    def __init__ (self, config, episode, generation_number = 1, continue_values = None):
+    def __init__ (self, config, episode, experiment_folder, generation_number = 1, continue_values = None):
         self.config = config
         self.episode = episode
+        self.experiment_folder = experiment_folder
         self.generation_number = generation_number
         self.continue_values = continue_values
         # inspyred is moronic because it calls the evaluator to compute the initial fitness,
@@ -49,7 +50,7 @@ class Evaluator:
         Evaluate a population.  This is the main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
         """
         if self.continue_values is None:
-            with open (self.config.experiment_folder + "population.csv", 'a') as fp:
+            with open (self.experiment_folder + "population.csv", 'a') as fp:
                 f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
                 for chromosome in population:
                     row = [
@@ -134,6 +135,12 @@ class Evaluator:
         The images are written in folder tmp relative to 
         """
         print "\n\n* ** Starting Video Split..."
+        bashCommandSplit = "avconv" + \
+                           " -i " + filename_real + \
+                           " -r " + str (self.config.frame_per_second) + \
+                           " -loglevel error" + \
+                           " -frames:v " + str (self.number_analysed_frames) + \
+                           " -f image2 tmp/iteration-image-%4d.jpg"
         bashCommandSplit = "ffmpeg" + \
                            " -i " + filename_real + \
                            " -r " + str (self.config.frame_per_second) + \
@@ -172,6 +179,10 @@ class Evaluator:
             return self.penalize_passive_casu (picked_arena)
         elif self.config.fitness_function == 'background_bees_active_minus_passive':
             return self.background_bees_active_minus_passive (picked_arena)
+        elif self.config.fitness_function == 'frames_with_no_movement_active_casu_roi':
+            return self.frames_with_no_movement_active_casu_roi (picked_arena)
+        elif self.config.fitness_function == 'frames_with_no_movement_active_passive_casu_rois':
+            return self.frames_with_no_movement_active_passive_casu_rois (picked_arena)
 
     def background_bees_active_minus_passive (self, picked_arena):
         """
@@ -208,30 +219,34 @@ class Evaluator:
             fp.close ()
         return result
 
-    def proposal (self, picked_arena):
+    def frames_with_no_movement_active_casu_roi (self, picked_arena):
         """
-        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+        In this function we count how many frames
+        where there is no movement in the active CASU ROI.
+        The result is the number of frames.
         """
         result = 0
         with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
             freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-            freader.next ()
-            freader.next ()
+            freader.next () # skip header row
+            freader.next () # skip first frame (LED is on)
             for row in freader:
                 if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
                     result += 1
             fp.close ()
         return result
 
-    def proposal_v2 (self, picked_arena):
+    def frames_with_no_movement_active_passive_casu_rois (self, picked_arena):
         """
-        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+        In this function we count how many frames where there is no movement in the active CASU ROI,
+        and we count how many frames where there is no movement in the passive CASU ROI.
+        The result is the sum of the first count minus the sum of the second count.
         """
         result = 0
         with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
             freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-            freader.next ()
-            freader.next ()
+            freader.next () # skip header row
+            freader.next () # skip first frame (LED is on)
             for row in freader:
                 if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
                     result += 1
@@ -261,7 +276,7 @@ class Evaluator:
         """
         Save the result of a chromosome evaluation.
         """
-        with open (self.config.experiment_folder + "evaluation.csv", 'a') as fp:
+        with open (self.experiment_folder + "evaluation.csv", 'a') as fp:
             f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
             f.writerow ([
                 self.generation_number,

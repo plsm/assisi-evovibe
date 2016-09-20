@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-#import image
-
 from __future__ import print_function
 
-import yaml
 import os
+import functools
 
-class Config:
+import chromosome
+import best_config
+from best_config import Parameter
+
+class Config (best_config.Config):
     """
     Configuration setup of an incremental evolutionary algorithm setup.
 
@@ -32,71 +34,94 @@ class Config:
     """
 
     def __init__ (self):
-        if os.path.isfile ('config'):
-            self.__load_from_file ()
-        else:
-            self.__ask_user ()
-
-    def __load_from_file (self):
-        file_object = open ('config', 'r')
-        dictionary = yaml.load (file_object)
-        file_object.close ()
-        #DEBUG print dictionary
-        try:
-            self.number_bees                        = dictionary ['number_bees']
-            self.number_generations                 = dictionary ['number_generations']
-            self.number_evaluations_per_episode     = dictionary ['number_evaluations_per_episode']
-            self.evaluation_run_time                = dictionary ['evaluation_run_time']
-            self.spreading_waiting_time             = dictionary ['spreading_waiting_time']
-            self.population_size                    = dictionary ['population_size']
-            self.number_evaluations_per_chromosome  = dictionary ['number_evaluations_per_chromosome']
-            #self.stopped_threshold                  = dictionary ['stopped_threshold']
-            #self.aggregation_minDuration_thresh     = dictionary ['aggregation_minDuration_thresh']
-            self.fitness_function                   = dictionary ['fitness_function']
-            self.arena_type                         = dictionary ['arena_type']
-            self.constant_airflow                   = dictionary ['constant_airflow']
-            self.frame_per_second                   = dictionary ['frame_per_second']
-            self.image_width                        = dictionary ['image']['width']
-            self.image_height                       = dictionary ['image']['height']
-            self.image_processing_pixel_count_previous_frame_threshold = dictionary ['image_processing']['pixel_count_previous_frame_threshold']
-            self.image_processing_pixel_count_background_threshold     = dictionary ['image_processing']['pixel_count_background_threshold']
-            self.chromosome_type                    = dictionary ['chromosome_type']
-        except KeyError as e:
-            print ("The configuration file does not have parameter '%s'\n" % (str (e)))
-            raise
-        self.aggregation_threhsoldN = 55 # Threshold for the number of bees aggregated around the vibrating CASU
-
-    def __ask_user (self):
-        """
-        Ask the user what is the configuration setup to use.
-        Creates a file 'config' with the configuration setup.
-        """
-        print ("\n\n* ** Configuration Setup ** *")
-        self.number_bees = int (raw_input ("Number of bees? "))
-        self.number_generations = int (raw_input ("Number of generations of the evolutionary algorithm? "))
-        self.number_evaluations_per_episode = int (raw_input ("How many evaluations to perform with a set of bees?" ))
-        self.evaluation_runtime = int (raw_input ("Time in seconds of the total vibration pattern? "))
-        self.spreading_waiting_time = int (raw_input ("Time in seconds to spread the bees? "))
-        self.population_size = int (raw_input ("Population size of the evolutionary algorithm? "))
-        self.number_evaluations_per_chromosome = int (raw_input ("How many evaluations to perform with a chromosome? "))
-        print ("1 - background bee pixels in active CASU ROI if there is no movement in active CASU ROI")
-        print ("2 - background bee pixels in active CASU ROI if there is no movement in active CASU ROI minus background bee pixels in passive CASU if there is no movement in passive CASU ROI")
-        print ("3 - background bee pixels in active CASU ROI minus background bee pixels in passive CASU")
-        self.fitness_function = ['stopped_frames', 'penalize_passive_casu', 'background_bees_active_minus_passive'][int (raw_input ("Which fitness function to use? ")) - 1]
-        self.arena_type = 'StadiumBorderArena'
-        self.constant_airflow = False
-        self.frame_per_second = int (raw_input ("Frames per second? "))
+        best_config.Config.__init__ (self, [
+            Parameter ('number_bees',                    'Number of bees', parse_data = int),
+            Parameter ('number_generations',             'Number of generations of the evolutionary algorithm', parse_data = int),
+            Parameter ('number_evaluations_per_episode', 'How many evaluations to perform with a set of bees', parse_data = int),
+            Parameter ('evaluation_run_time',    'Time in seconds of the total vibration pattern', parse_data = int),
+            Parameter ('spreading_waiting_time',  'Time in seconds to spread the bees', parse_data = int),
+            Parameter ('population_size', 'Population size of the evolutionary algorithm', parse_data = int),
+            Parameter ('number_evaluations_per_chromosome',  'How many evaluations to perform with a chromosome', parse_data = int),
+            Parameter (
+                'fitness_function',
+                '''1 - background bee pixels in active CASU ROI if there is no movement in active CASU ROI
+2 - background bee pixels in active CASU ROI if there is no movement in active CASU ROI minus background bee pixels in passive CASU if there is no movement in passive CASU ROI
+3 - background bee pixels in active CASU ROI minus background bee pixels in passive CASU
+4 - number of frames with no movement in active CASU ROI
+5 - number of frames with no movement in active CASU ROI minus number of frames with no movement in passive CASU ROI
+Which fitness function to use''',
+                parse_data = lambda x : best_config.list_element (
+                    [
+                        'stopped_frames'
+                        , 'penalize_passive_casu'
+                        , 'background_bees_active_minus_passive'
+                        , 'frames_with_no_movement_active_casu_roi'
+                        , 'frames_with_no_movement_active_passive_casu_rois'
+                    ],
+                    x)),
+            Parameter (
+                'arena_type',
+                '''1 - stadium arena
+2 - circular arena
+Which arena to use''',
+                parse_data = lambda x : best_config.list_element (
+                    [
+                        'StadiumBorderArena' ,
+                        'CircularArena'
+                    ],
+                    x)),
+            Parameter ('frame_per_second', 'Frames per second', parse_data = int),
+            Parameter (
+                'chromosome_type',
+                '''1 - single pulse, pause gene
+2 - single pulse, frequency gene
+3 - single pulse, frequency gene, active part gene, pause gene
+Which chromosome type (vibration pattern) to use''',
+                parse_data = lambda x : best_config.list_element (
+                    [
+                        'SinglePulseGenePause'
+                        , 'SinglePulseGeneFrequency'
+                        , 'SinglePulseGenesPulse'
+                    ],
+                    x)),
+            Parameter ('pixel_count_previous_frame_threshold', 'Threshold to use when comparing current frame with a previous frame',       path_in_dictionary = ['image_processing'], parse_data = int, default_value = 1000),
+            Parameter ('pixel_count_background_threshold',     'Threshold to use when comparing current frame image with background image', path_in_dictionary = ['image_processing'], parse_data = int, default_value = 1000),
+            Parameter (
+                'same_colour_threshold',                'Threshold to use when computing difference in pixel color',                 path_in_dictionary = ['image_processing'],
+                parse_data = functools.partial (best_config.compose, f = functools.partial (best_config.between, min_value = 0, max_value = 0), g = int), default_value = 25),
+            Parameter ('interval_current_previous_frame',      'Time distance between compared frames',                                     path_in_dictionary = ['image_processing'], default_value = 1),
+            Parameter (
+                'sound_hardware',
+                '''1 - CASU
+2 - speaker
+Which sound hardware to use''',
+                parse_data = lambda x : best_config.list_element (
+                    [
+                        'Zagreb',
+                        'Graz'
+                    ],
+                    x))
+            ])
         self.image_width = 600
         self.image_height = 600
-        print ("1 - single pulse, pause gene")
-        print ("2 - single pulse, frequency gene, active part gene, pause gene")
-        self.chromosome_type = ['SinglePulseGenePause', 'SinglePulseGenesPulse'][int (raw_input ("Which chromosome type (vibration pattern) to use? ")) - 1]
-        self.image_processing_pixel_count_previous_frame_threshold = 100
-        self.image_processing_pixel_count_background_threshold = 100
-        file_object = open ('config', 'w')
-        file_object.write (self.__str__ ())
-        file_object.close ()
-        print ("Created file 'config'!")
+        if os.path.isfile ('config'):
+            self.load_from_yaml_file ('config')
+        else:
+            self.ask_user ()
+        if self.sound_hardware == 'Graz':
+            if self.chromosome_type == "SinglePulseGenePause":
+                self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model_v2
+            elif self.chromosome_type == "SinglePulseGeneFrequency":
+                self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model_v2
+            elif self.chromosome_type == "SinglePulseGenesPulse":
+                self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model_v2
+        elif self.sound_hardware == 'Zagreb':
+            if self.chromosome_type == "SinglePulseGenePause":
+                self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
+            elif self.chromosome_type == "SinglePulseGeneFrequency":
+                self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model
+            elif self.chromosome_type == "SinglePulseGenesPulse":
+                self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
 
     def status (self):
         """
@@ -119,44 +144,7 @@ class Config:
         print ("----------------------------------------------------------------")
         raw_input ('Press ENTER to continue. ')
 
-    def __str__ (self):
-        return """number_bees : %d
-number_generations: %d
-number_evaluations_per_episode: %d
-evaluation_run_time: %d
-spreading_waiting_time: %d
-population_size: %d
-number_evaluations_per_chromosome: %d
-fitness_function : '%s'
-constant_airflow : '%s'
-arena_type : '%s'
-frame_per_second : %d
-image :
-    width : %d
-    height : %d
-image_processing :
-    pixel_count_previous_frame_threshold : %d
-    pixel_count_background_threshold : %d
-chromosome_type : '%s'
-""" % (self.number_bees,
-       self.number_generations,
-       self.number_evaluations_per_episode,
-       self.evaluation_run_time,
-       self.spreading_waiting_time,
-       self.population_size,
-       self.number_evaluations_per_chromosome,
-       self.fitness_function,
-       str (self.constant_airflow),
-       self.arena_type,
-       self.frame_per_second,
-       self.image_width,
-       self.image_height,
-       self.image_processing_pixel_count_previous_frame_threshold,
-       self.image_processing_pixel_count_background_threshold,
-       self.chromosome_type
-       )
-
 if __name__ == '__main__':
     print ("Debugging config.py")
-    c = Config ('config')
+    c = Config ()
     print (c)
