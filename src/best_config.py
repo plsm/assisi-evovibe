@@ -18,6 +18,9 @@ def list_element (the_list, x):
     f = lambda x : between (0, len (the_list) - 1, x)
     return compose (the_list.__getitem__, f, compose (sub, int, x))
 
+def str2bool (x):
+    return True if x == 'True' else False
+
 class Parameter:
     def __init__ (self, name, user_prompt, path_in_dictionary = [], default_value = None, parse_data = identity):
         self.name = name
@@ -50,6 +53,8 @@ class Parameter:
                 self.value = self.parse_data (raw_input (self.user_prompt + '? '))
                 self.has_value = True
                 return
+            except KeyboardInterrupt as e:
+                raise e
             except:
                 print 'Invalid data!'
 

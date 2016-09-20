@@ -347,8 +347,8 @@ if __name__ == '__main__':
     lws = worker_settings.load_worker_settings ('workers')
     for ws in lws:
         print ws
-    import new_config
-    cfg = new_config.Config ()
+    import config
+    cfg = config.Config ()
     dws = dict ([(ws.casu_number, ws) for ws in lws])
     ca = CircularArena (dws, "/tmp/assisi/", "/tmp/assisi/", 1, cfg)
     ca.create_region_of_interests_image ()

@@ -269,7 +269,7 @@ class SinglePulseGenesPulse (AbstractChromosome):
             elif gene_index == 1:
                 new_gene = gaussian_perturbation (random, candidate [1], MIN_PERIOD, MAX_PERIOD, STEP_PERIOD, STDDEV_PERIOD)
                 result [1] = new_gene
-            elif gene_index == 3:
+            elif gene_index == 2:
                 new_gene = gaussian_perturbation (random, candidate [2], MIN_PERIOD - STEP_PERIOD, MAX_PERIOD, STEP_PERIOD, STDDEV_PERIOD)
                 result [2] = new_gene
             elif gene_index == 3:

@@ -100,7 +100,8 @@ Which sound hardware to use''',
                         'Zagreb',
                         'Graz'
                     ],
-                    x))
+                    x)),
+            Parameter ('elitism', 'Use elitism in evolutionary algorithm', parse_data = str2bool, default_value = False)
             ])
         self.image_width = 600
         self.image_height = 600
