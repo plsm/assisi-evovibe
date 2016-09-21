@@ -45,23 +45,23 @@ class Evaluator:
         # first calls the evaluator and then increments the generation number
         self.number_analysed_frames = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
 
-    def population_evaluator (self, population, args = None):
+    def population_evaluator (self, candidates, args = None):
         """
         Evaluate a population.  This is the main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
         """
         if self.continue_values is None:
             with open (self.experiment_folder + "population.csv", 'a') as fp:
                 f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
-                for chromosome in population:
+                for chromosome in candidates:
                     row = [
                         self.generation_number,
                         self.episode.episode_index,
                         ] + chromosome
                     f.writerow (row)
                 fp.close ()
-            result = [self.chromosome_fitness (chromosome) for chromosome in population]
+            result = [self.chromosome_fitness (chromosome) for chromosome in candidates]
         else:
-            result = [self.chromosome_fitness (chromosome) for chromosome in population]
+            result = [self.chromosome_fitness (chromosome) for chromosome in candidates]
             self.continue_values = None
         print ("Generation ", self.generation_number, "  Population fitness: " , result)
         self.generation_number += 1
@@ -123,7 +123,7 @@ class Evaluator:
                             ' --gst-plugin-path=/usr/local/lib/gstreamer-0.10/' + \
                             ' --gst-plugin-load=libgstaravis-0.4.so' + \
                             ' -v aravissrc num-buffers=' + str (int (num_buffers)) + \
-                            ' ! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
+                            ' ! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=' + str (int (self.config.frame_per_second)) + '/1' + \
                             ' ! jpegenc ! avimux name=mux ! filesink location=' + filename_real    # with time - everytime generate a new file
         return (subprocess.Popen (bashCommand_video, shell=True, executable='/bin/bash'), filename_real)
 
@@ -197,9 +197,9 @@ class Evaluator:
             freader.next ()
             freader.next ()
             for row in freader:
-                if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold:
+                if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold:
                     result += row [picked_arena.selected_worker_index * 2]
-                if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.image_processing_pixel_count_background_threshold:
+                if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.pixel_count_background_threshold:
                     result += -row [(1 - picked_arena.selected_worker_index) * 2]
             fp.close ()
         return result
@@ -214,7 +214,7 @@ class Evaluator:
             freader.next ()
             freader.next ()
             for row in freader:
-                if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
                     result += row [picked_arena.selected_worker_index * 2]
             fp.close ()
         return result
@@ -231,7 +231,7 @@ class Evaluator:
             freader.next () # skip header row
             freader.next () # skip first frame (LED is on)
             for row in freader:
-                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
                     result += 1
             fp.close ()
         return result
@@ -248,9 +248,9 @@ class Evaluator:
             freader.next () # skip header row
             freader.next () # skip first frame (LED is on)
             for row in freader:
-                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
                     result += 1
-                if  row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                if  row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
                     result += -1
             fp.close ()
         return result
@@ -265,9 +265,9 @@ class Evaluator:
             freader.next () # skip header row
             freader.next () # skip data from frame with LED on
             for row in freader:
-                if row [picked_arena.selected_worker_index * 2] > self.config.image_processing_pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
                     result += row [picked_arena.selected_worker_index * 2]
-                if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.image_processing_pixel_count_background_threshold and row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.image_processing_pixel_count_previous_frame_threshold:
+                if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.pixel_count_background_threshold and row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
                     result += -row [(1 - picked_arena.selected_worker_index) * 2]
             fp.close ()
         return result

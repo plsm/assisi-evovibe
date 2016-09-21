@@ -108,7 +108,7 @@ class Episode:
         print "\n\n* ** Creating background image..."
         filename = self.current_path + 'Background.avi'
         bashCommand = 'gst-launch-0.10 --gst-plugin-path=/usr/local/lib/gstreamer-0.10/ --gst-plugin-load=libgstaravis-0.4.so -v aravissrc num-buffers=1 ' + \
-                      '! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=1/' + str (int (1.0 / self.config.frame_per_second)) + \
+                      '! video/x-raw-yuv,width=' + str (self.config.image_width) + ',height=' + str (self.config.image_height) + ',framerate=1/' + str (int (self.config.frame_per_second)) + '/1' + \
                       ' ! jpegenc ! avimux name=mux ! filesink location=' + filename    # with time - everytime generate a new file
         p = subprocess.Popen (bashCommand, shell = True, executable = '/bin/bash') #run the recording stream
         p.wait ()

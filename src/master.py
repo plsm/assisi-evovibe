@@ -245,7 +245,7 @@ def fitness_save_observer (population, num_generations, num_evaluations, args):
     with open (config_experiment_folder + "fitness.csv", 'a') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
         for individual in population:
-            row = [num_generations, individual.fitness] + individual.candidate [0:len (individual.candidate) / 2]
+            row = [num_generations, individual.fitness] + individual.candidate
             f.writerow (row)
         fp.close ()
 
