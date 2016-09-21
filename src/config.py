@@ -101,7 +101,7 @@ Which sound hardware to use''',
                         'Graz'
                     ],
                     x)),
-            Parameter ('elitism', 'Use elitism in evolutionary algorithm', parse_data = str2bool, default_value = False)
+            Parameter ('elitism', 'Use elitism in evolutionary algorithm', parse_data = best_config.str2bool, default_value = False)
             ])
         self.image_width = 600
         self.image_height = 600
