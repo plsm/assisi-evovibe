@@ -337,9 +337,9 @@ if args.command in ['new-run', 'new_run']:
 elif args.command in ['continue-run', 'continue_run']:
     cfg = config.Config ()
     cfg.status ()
-    experiment_folder = check_run (cfg, args)
+    experiment_folder = check_run (args)
     current_generation, current_episode, seeds, eva_values = load_population_and_evaluation (cfg, experiment_folder)
-    worker_stubs = dict ([ws.connect_to_worker () for ws in load_worker_settings (args.workers)])
+    worker_stubs = dict ([ws.connect_to_worker (cfg) for ws in worker_settings.load_worker_settings (args.workers)])
     print worker_stubs
     run_inspyred (cfg, worker_stubs, experiment_folder, current_generation, current_episode + 1, seeds, eva_values)
 elif args.command in ['deploy']:
