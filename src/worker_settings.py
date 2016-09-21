@@ -1,3 +1,6 @@
+import zmq_sock_utils
+import worker
+
 import assisipy.deploy
 import assisipy.assisirun
 
