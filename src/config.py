@@ -38,6 +38,7 @@ class Config (best_config.Config):
             Parameter ('number_bees',                    'Number of bees', parse_data = int),
             Parameter ('number_generations',             'Number of generations of the evolutionary algorithm', parse_data = int),
             Parameter ('number_evaluations_per_episode', 'How many evaluations to perform with a set of bees', parse_data = int),
+            Parameter ('bee_relax_time',                 'How many seconds to wait before testing the first vibration pattern in a set of bees', parse_data = int, default_value = 0),
             Parameter ('evaluation_run_time',    'Time in seconds of the total vibration pattern', parse_data = int),
             Parameter ('spreading_waiting_time',  'Time in seconds to spread the bees', parse_data = int),
             Parameter ('population_size', 'Population size of the evolutionary algorithm', parse_data = int),

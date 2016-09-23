@@ -9,6 +9,7 @@ import subprocess
 import os
 import os.path
 import random
+import time
 
 class Episode:
     """
@@ -48,6 +49,10 @@ class Episode:
         self.make_background_image ()
         self.ask_arenas ()
         raw_input ('\nPlace %d bees in the arena(s) and press ENTER. ' % self.config.number_bees)
+        if self.config.bee_relax_time > 0:
+            print "I'm going to wait %ds for the bees to relax." % (bee.config.bee_relax_time)
+            time.sleep (self.config.bee_relax_time)
+            print "Bees should be ready to go!"
 
     def ask_user (self, chromosome):
         """
