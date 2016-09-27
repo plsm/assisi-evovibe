@@ -18,8 +18,7 @@ def find_app (app):
     process = subprocess.Popen (command, stdout = subprocess.PIPE, shell = True)
     out, _ = process.communicate ()
     return out [:-1]
-CONVERT_BIN_FILENAME = '/usr/bin/convert'
-CONVERT_BIN_FILENAME = '/usr/local/bin/convert'
+
 CONVERT_BIN_FILENAME = find_app ("convert")
 """
 Filename of the convert program.
@@ -29,6 +28,7 @@ It can be used to convert between image formats as well as resize an
 image, blur, crop, despeckle, dither, draw on, flip, join, re-sample,
 and much more.
 """
+
 COMPARE_BIN_FILENAME = find_app ("compare")
 
 def ask_casu_number (name, worker_settings):
@@ -43,8 +43,9 @@ def ask_casu_number (name, worker_settings):
                 if worker_settings [number].in_use:
                     print ("This CASU is already chosen!")
                 else:
+                    # FIX this if 
                     worker_settings [number].in_use = True
-                    return (number, worker_settings [number].socket)
+                    return (number, worker_settings [number].socket, worker_settings [number])
             else:
                 print ("There is no worker associated with CASU number %d." % (number))
         except ValueError:
@@ -66,6 +67,13 @@ class AbstractArena:
         self.same_colour_threshold = '%d%%' % (config.same_colour_threshold)
         self.delta_image = int (config.frame_per_second / config.interval_current_previous_frame)
 
+    def unselect_workers (self):
+        """If the user does not like the arena, the workers that have been
+        assigned are free to be selected again.
+        """
+        for ws in self.workers:
+            ws [2].in_use = False
+
     def status (self):
         """
         Return the suitability of this arena to run a vibration pattern.  The CASU temperature must be below a minimum threshold.  The suitability is a function of the CASU ring temperature sensor.
@@ -73,7 +81,7 @@ class AbstractArena:
         value = 0
         temps = []
         good = True
-        for (_, socket) in self.workers:
+        for (_, socket, _) in self.workers:
             temperature = zmq_sock_utils.send_recv (socket, [worker.CASU_STATUS])
             temps.append (temperature)
             if temperature > worker.CASU_TEMPERATURE + 1 or temperature < worker.CASU_TEMPERATURE - 1:
@@ -98,7 +106,7 @@ class AbstractArena:
         """
         self.selected_worker_index = random.randrange (len (self.workers))
         for i in xrange (len (self.workers)):
-            (_, socket) = self.workers [i]
+            (_, socket, _) = self.workers [i]
             if i == self.selected_worker_index:
                 zmq_sock_utils.send (socket, [worker.ACTIVE_CASU, chromosome])
             else:
@@ -106,7 +114,7 @@ class AbstractArena:
         if config.sound_hardware == 'Graz':
             time.sleep (2.0 / config.frame_per_second)
             config.run_vibration_model (chromosome, self.selected_worker_index, config.evaluation_run_time)
-        for (number, socket) in self.workers:
+        for (number, socket, _) in self.workers:
             answer = zmq_sock_utils.recv (socket)
             print ("Worker responsible for casu #%d responded with: %s" % (number, str (answer)))
 
@@ -142,17 +150,17 @@ class AbstractArena:
             CONVERT_BIN_FILENAME,
             '(', mask, image1, '-compose', 'multiply', '-composite', ')',
             '(', mask, image2, '-compose', 'multiply', '-composite', ')',
-            '-metric', 'AE', '-fuzz', '25%', '-compare',
+            '-metric', 'AE', '-fuzz', self.same_colour_threshold, '-compare',
             '-format', '%[distortion]', 'info:'
             ]
         process = subprocess.Popen (command, stdout=subprocess.PIPE)
         out, err = process.communicate ()
         try:
-            value = float (out)
+            value = int (out)
         except:
             print ("Result is [" + out + "]")
             raise
-        return float (out)
+        return int (out)
         
     def compare_images (self, ith_image):
         """
@@ -277,6 +285,9 @@ class StadiumBorderArena (AbstractArena):
             '-composite',
             self.img_path + 'Arena-Bot-CASU.jpg'])
 
+    def image_processing_header (self):
+        return ["background_top", "previous_iteration_top", "background_bottom", "previous_iteration_bottom"]
+
     def write_properties (self):
         """
         Save the arena properties for later reference.
@@ -328,6 +339,9 @@ class CircularArena (AbstractArena):
             '-draw', 'circle %d,%d %d,%d' % (self.arena_center_x, self.arena_center_y, self.arena_center_x, self.arena_center_y + self.arena_radius), 
             self.img_path + 'Mask-0.jpg'])
             
+    def image_processing_header (self):
+        return ["background", "previous_iteration"]
+
     def write_properties (self):
         """
         Save the arena properties for later reference.

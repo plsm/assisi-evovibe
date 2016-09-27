@@ -162,7 +162,7 @@ class Evaluator:
         print ("\n\n* ** Comparing Images...")
         fp = open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'w')
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-        f.writerow (["background_A", "previous_iteration_A", "background_B", "previous_iteration_B"])
+        f.writerow (picked_arena.image_processing_header ())
         for i in xrange (1, self.number_analysed_frames + 1):
             f.writerow (picked_arena.compare_images (i))
         fp.close ()

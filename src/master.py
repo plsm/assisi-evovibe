@@ -23,6 +23,10 @@ import random
 
 import worker_settings
 
+FIT_GENERATION = 0
+FIT_FITNESS = 1
+FIT_CHROMOSOME_GENE = 2
+
 # class WorkerSettings:
 #     """
 #     Worker settings used by the master program to deploy the workers.
@@ -319,32 +323,36 @@ def run_inspyred (config, worker_stubs, experiment_folder, current_generation = 
     for ws in worker_stubs.values ():
         ws.terminate_session ()
     print ("Evolutionary Strategy algorithm finished!")
-    
-try:
-    os.makedirs ("tmp")
-except OSError:
-    pass
-args = parse_arguments ()
-if args.command in ['new-run', 'new_run']:
-    cfg = config.Config ()
-    cfg.status ()
-    worker_stubs = dict ([ws.connect_to_worker (cfg) for ws in worker_settings.load_worker_settings (args.workers)])
-    print worker_stubs
-    experiment_folder = calculate_experiment_folder_for_new_run (args)
-    create_directories_for_experimental_run (experiment_folder, args)
-    create_experimental_run_files (experiment_folder)
-    run_inspyred (cfg, worker_stubs, experiment_folder)
-elif args.command in ['continue-run', 'continue_run']:
-    cfg = config.Config ()
-    cfg.status ()
-    experiment_folder = check_run (args)
-    current_generation, current_episode, seeds, eva_values = load_population_and_evaluation (cfg, experiment_folder)
-    worker_stubs = dict ([ws.connect_to_worker (cfg) for ws in worker_settings.load_worker_settings (args.workers)])
-    print worker_stubs
-    run_inspyred (cfg, worker_stubs, experiment_folder, current_generation, current_episode + 1, seeds, eva_values)
-elif args.command in ['deploy']:
-    worker_settings.deploy_workers (args.workers, None)
-elif args.command == None:
-    print ("Nothing to do!\n")
-else:
-    print ("Unknown command: %s" % args.command)
+
+def main ():
+    try:
+        os.makedirs ("tmp")
+    except OSError:
+        pass
+    args = parse_arguments ()
+    if args.command in ['new-run', 'new_run']:
+        cfg = config.Config ()
+        cfg.status ()
+        worker_stubs = dict ([ws.connect_to_worker (cfg) for ws in worker_settings.load_worker_settings (args.workers)])
+        print worker_stubs
+        experiment_folder = calculate_experiment_folder_for_new_run (args)
+        create_directories_for_experimental_run (experiment_folder, args)
+        create_experimental_run_files (experiment_folder)
+        run_inspyred (cfg, worker_stubs, experiment_folder)
+    elif args.command in ['continue-run', 'continue_run']:
+        cfg = config.Config ()
+        cfg.status ()
+        experiment_folder = check_run (args)
+        current_generation, current_episode, seeds, eva_values = load_population_and_evaluation (cfg, experiment_folder)
+        worker_stubs = dict ([ws.connect_to_worker (cfg) for ws in worker_settings.load_worker_settings (args.workers)])
+        print worker_stubs
+        run_inspyred (cfg, worker_stubs, experiment_folder, current_generation, current_episode + 1, seeds, eva_values)
+    elif args.command in ['deploy']:
+        worker_settings.deploy_workers (args.workers, None)
+    elif args.command == None:
+        print ("Nothing to do!\n")
+    else:
+        print ("Unknown command: %s" % args.command)
+
+if __name__ == '__main__':
+    main ()

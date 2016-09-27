@@ -50,7 +50,7 @@ class Episode:
         self.ask_arenas ()
         raw_input ('\nPlace %d bees in the arena(s) and press ENTER. ' % self.config.number_bees)
         if self.config.bee_relax_time > 0:
-            print "I'm going to wait %ds for the bees to relax." % (bee.config.bee_relax_time)
+            print "I'm going to wait %ds for the bees to relax." % (self.config.bee_relax_time)
             time.sleep (self.config.bee_relax_time)
             print "Bees should be ready to go!"
 
@@ -158,6 +158,8 @@ class Episode:
                 command = "display " + img_path + "Region-of-Interests.jpg"
                 display_process = subprocess.Popen (command, shell = True)
                 roi_ko = raw_input ("Are the region of interests ok? ").upper () [0] == 'N'
+                if roi_ko:
+                    new_arena.unselect_workers ()
                 display_process.kill ()
             self.arenas.append (new_arena)
             new_arena.create_mask_images_casu_images (self.config)
@@ -211,10 +213,11 @@ class Episode:
 if __name__ == '__main__':
     import worker_settings
     lws = worker_settings.load_worker_settings ('workers')
+    import config
+    cfg = config.Config ()
     for ws in lws:
         print ws
-    import new_config
-    cfg = new_config.Config ()
+        ws.connect_to_worker (cfg)
     dws = dict ([(ws.casu_number, ws) for ws in lws])
     epsd = Episode (cfg, dws, '/tmp/assisi/')
     epsd.initialise ()
