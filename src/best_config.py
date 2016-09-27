@@ -39,7 +39,7 @@ class Parameter:
             for n in self.path_in_dictionary:
                 dictionary = dictionary [n]
             self.value = dictionary [self.name]
-        except ValueError as e:
+        except KeyError as e:
             if self.default_value is None:
                 raise e
             else:

@@ -102,6 +102,23 @@ Which sound hardware to use''',
                         'Graz'
                     ],
                     x)),
+            Parameter (
+                'evaluation_values_reduce',
+                '''1 - average
+2 - average without maximum and minimum
+3 - weighted average
+Which method to use when computing the chromosome fitness from a set of evaluations''',
+                parse_data = lambda x : best_config.list_element (
+                    [
+                        'average'
+                        , 'average_without_best_worst'
+                        , 'weighted_average'
+                    ],
+                    x),
+                default_value = 'average'
+            ),
+            Parameter ('vibration_period',  'vibration period used in chromosome with single gene that represents vibration frequency', path_in_dictionary = ['chromosome', 'single_pulse_gene_frequency'], parse_data = int, default_value = -1),
+                       
             Parameter ('elitism', 'Use elitism in evolutionary algorithm', parse_data = best_config.str2bool, default_value = False)
             ])
         self.image_width = 600
@@ -124,6 +141,8 @@ Which sound hardware to use''',
                 self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model
             elif self.chromosome_type == "SinglePulseGenesPulse":
                 self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
+        if self.vibration_period != -1:
+            chromosome.SinglePulseGeneFrequency.VIBRATION_PERIOD = self.vibration_period
 
     def status (self):
         """

@@ -40,10 +40,15 @@ class Evaluator:
         self.experiment_folder = experiment_folder
         self.generation_number = generation_number
         self.continue_values = continue_values
-        # inspyred is moronic because it calls the evaluator to compute the initial fitness,
-        # does not increment the generation number, then enters the evolution loop where it
-        # first calls the evaluator and then increments the generation number
         self.number_analysed_frames = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
+        if self.config.evaluation_values_reduce == 'average':
+            self._evaluation_values_reduce = self.evr_average
+        elif self.config.evaluation_values_reduce == 'average_without_best_worst':
+            self._evaluation_values_reduce = evr_average_without_best_worst
+        elif self.config.evaluation_values_reduce == 'weighted_average':
+            self._evaluation_values_reduce = self.evr_weighted_average
+        else:
+            raise Exception ("Invalid evaluation values reduce: " + str (self.config.evaluation_values_reduce))
 
     def population_evaluator (self, candidates, args = None):
         """
@@ -67,7 +72,7 @@ class Evaluator:
         self.generation_number += 1
         return result
         
-    def chromosome_fitness (self, chromosome):
+    def chromosome_fitness_XXX (self, chromosome):
         """
         Compute the fitness of chromosome.  This is the value that is going to be
         used by the evolutionary algorithm in the inspyred package.
@@ -89,6 +94,31 @@ class Evaluator:
                 self.continue_values = self.continue_values [1:]
         return sum (values) / self.config.number_evaluations_per_chromosome
 
+    def chromosome_fitness (self, chromosome):
+        """
+        Compute the fitness of chromosome.  This is the value that is going to be
+        used by the evolutionary algorithm in the inspyred package.
+        """
+        self.episode.ask_user (chromosome)
+        values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
+        return self._evaluation_values_reduce (values)
+
+    def evr_average (self, values):
+        """Reduce evaluation values by computing the average"""
+        return sum (values) / self.config.number_evaluations_per_chromosome
+
+    def evr_average_without_best_worst (self, values):
+        """
+        Reduce evaluation values by taking the best and worst and then computing the average"""
+        return (sum (values) - max (values) - min (values)) / (self.config.number_evaluations_per_chromosome - 2)
+
+    def evr_weighted_average (self, values):
+        best = max (values)
+        worst = min (values)
+        mean = sum (values) / self.config.number_evaluations_per_chromosome
+        weight = 1.0 * (self.number_analysed_frames - (best - worst)) / self.number_analysed_frames
+        return mean * weight
+        
     def iteration_step (self, candidate, index_evaluation):
         """
         Experimental step where a candidate chromosome evaluation is done.
