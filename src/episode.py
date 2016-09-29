@@ -52,7 +52,7 @@ class Episode:
         if self.config.bee_relax_time > 0:
             print "I'm going to wait %ds for the bees to relax." % (self.config.bee_relax_time)
             time.sleep (self.config.bee_relax_time)
-            print "Bees should be ready to go!"
+            print "Bees should be ready to go!\n"
 
     def ask_user (self, chromosome):
         """
@@ -61,18 +61,18 @@ class Episode:
         interact = self.current_evaluation_in_episode < self.config.number_evaluations_per_episode
         while interact:
             print "Press ENTER to evaluate chromosome " + str (chromosome)
-            print "Enter an integer x to spread bees for x seconds"
-            print "Enter 'replace bees' to end the current episode and start a new one with new bees"
+            print "- Enter an integer x to spread bees for x seconds"
+            print "- Enter 'replace bees' to end the current episode and start a new one with new bees"
             ans = raw_input ("? ")
             try:
                 seconds = int (ans)
                 print "Spreading bees for %d seconds..." % (seconds)
                 #self.episode.spread_bees (seconds)
                 for arena in self.arenas:
-                    for (_, socket) in arena.workers:
+                    for (_, socket, _) in arena.workers:
                         zmq_sock_utils.send (socket, [worker.SPREAD_BEES, seconds])
                 for arena in self.arenas:
-                    for (number, socket) in arena.workers:
+                    for (number, socket, _) in arena.workers:
                         answer = zmq_sock_utils.recv (socket)
                         print ("Worker responsible for casu #%d responded with: %s" % (number, str (answer)))
             except ValueError:

@@ -43,6 +43,7 @@ class Parameter:
             if self.default_value is None:
                 raise e
             else:
+                print "Using default value %s for %s!" % (self.default_value, self.name)
                 self.value = self.default_value
         finally:
             self.has_value = True

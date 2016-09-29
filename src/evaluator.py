@@ -9,7 +9,7 @@ import assisipy
 
 # Column indexes in file population.csv
 POP_GENERATION       = 0
-POP_EPISODE          = 1
+#POP_EPISODE          = 1
 POP_CHROMOSOME_GENES = 2
 
 # Column indexes in file evaluation.csv
@@ -20,6 +20,13 @@ EVA_SELECTED_ARENA   = 3
 EVA_ACTIVE_CASU      = 4
 EVA_VALUE            = 5
 EVA_CHROMOSOME_GENES = 6
+
+# Column indexes in file partial.csv
+PRT_GENERATION       = 0
+PRT_EPISODE          = 1
+PRT_FITNESS          = 2
+PRT_CHROMOSOME_GENES = 3
+
 
 class Evaluator:
     """
@@ -34,12 +41,11 @@ class Evaluator:
 
     :param config: A Python object with the following attributes
     """
-    def __init__ (self, config, episode, experiment_folder, generation_number = 1, continue_values = None):
+    def __init__ (self, config, episode, experiment_folder, generation_number = 0):
         self.config = config
         self.episode = episode
         self.experiment_folder = experiment_folder
         self.generation_number = generation_number
-        self.continue_values = continue_values
         self.number_analysed_frames = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
         if self.config.evaluation_values_reduce == 'average':
             self._evaluation_values_reduce = self.evr_average
@@ -54,45 +60,42 @@ class Evaluator:
         """
         Evaluate a population.  This is the main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
         """
-        if self.continue_values is None:
+        self.generation_number += 1
+        if len (candidates) == self.config.population_size:
             with open (self.experiment_folder + "population.csv", 'a') as fp:
                 f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
                 for chromosome in candidates:
                     row = [
                         self.generation_number,
-                        self.episode.episode_index,
+                        None
                         ] + chromosome
                     f.writerow (row)
                 fp.close ()
-            result = [self.chromosome_fitness (chromosome) for chromosome in candidates]
-        else:
-            result = [self.chromosome_fitness (chromosome) for chromosome in candidates]
-            self.continue_values = None
+        result = [self.chromosome_fitness (chromosome) for chromosome in candidates]
         print ("Generation ", self.generation_number, "  Population fitness: " , result)
-        self.generation_number += 1
         return result
         
-    def chromosome_fitness_XXX (self, chromosome):
-        """
-        Compute the fitness of chromosome.  This is the value that is going to be
-        used by the evolutionary algorithm in the inspyred package.
-        """
-        if self.continue_values is None:
-            self.episode.ask_user (chromosome)
-            values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
-        else:
-            first = True
-            values = []
-            for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
-                if self.continue_values [0] is None:
-                    if first:
-                        first = False
-                        self.episode.ask_user (chromosome)
-                    values.append (self.iteration_step (chromosome, index_evaluation))
-                else:
-                    values.append (self.continue_values [0])
-                self.continue_values = self.continue_values [1:]
-        return sum (values) / self.config.number_evaluations_per_chromosome
+    # def chromosome_fitness_XXX (self, chromosome):
+    #     """
+    #     Compute the fitness of chromosome.  This is the value that is going to be
+    #     used by the evolutionary algorithm in the inspyred package.
+    #     """
+    #     if self.continue_values is None:
+    #         self.episode.ask_user (chromosome)
+    #         values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
+    #     else:
+    #         first = True
+    #         values = []
+    #         for index_evaluation in xrange (self.config.number_evaluations_per_chromosome):
+    #             if self.continue_values [0] is None:
+    #                 if first:
+    #                     first = False
+    #                     self.episode.ask_user (chromosome)
+    #                 values.append (self.iteration_step (chromosome, index_evaluation))
+    #             else:
+    #                 values.append (self.continue_values [0])
+    #             self.continue_values = self.continue_values [1:]
+    #     return sum (values) / self.config.number_evaluations_per_chromosome
 
     def chromosome_fitness (self, chromosome):
         """
@@ -101,7 +104,18 @@ class Evaluator:
         """
         self.episode.ask_user (chromosome)
         values = [self.iteration_step (chromosome, index_evaluation) for index_evaluation in xrange (self.config.number_evaluations_per_chromosome)]
-        return self._evaluation_values_reduce (values)
+        result = self._evaluation_values_reduce (values)
+        with open (self.experiment_folder + "partial.csv", 'a') as fp:
+            f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            row = [
+                self.generation_number,
+                self.episode.episode_index,
+                result
+            ] + chromosome
+            f.writerow (row)
+            fp.close ()
+        raw_input ("If you want to stop the program, this is the best time to do so, just press CONTROL-C.  Otherwise press ENTER")
+        return result
 
     def evr_average (self, values):
         """Reduce evaluation values by computing the average"""
@@ -110,6 +124,10 @@ class Evaluator:
     def evr_average_without_best_worst (self, values):
         """
         Reduce evaluation values by taking the best and worst and then computing the average"""
+        print "evr_average_without_best_worst"
+        print "evr_average_without_best_worst"
+        print "evr_average_without_best_worst"
+        print "evr_average_without_best_worst"
         return (sum (values) - max (values) - min (values)) / (self.config.number_evaluations_per_chromosome - 2)
 
     def evr_weighted_average (self, values):
