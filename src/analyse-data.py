@@ -20,6 +20,7 @@
 
 import master
 import evaluator
+import config
 
 import argparse
 import csv
@@ -47,8 +48,25 @@ def read_population_file ():
 def read_fitness_file ():
     return read_csv_file ("fitness.csv")
 
+def colorise (sequence):
+    h = max (sequence)
+    l = min (sequence)
+    c1 = (h - l) / 3 + l
+    c2 = 2 * (h - l) / 3 + l
+    import matplotlib.colors
+    print matplotlib.colors.from_levels_and_colors (levels = [l, c1, c2, h], colors = ['blue', 'red', 'green'])
+    # def torgb (x):
+    #     if x < c1:
+            
+    #         return 
+    return [str ((x - l) / (h - l)) for x in sequence]
 
 def summarise_fitness (fitness):
+    def row_result ():
+        rr = [generation]
+        for v in data:
+            rr.extend ([numpy.mean (v), numpy.std (v)])
+        return rr
     number_genes = len (fitness [0]) - master.FIT_CHROMOSOME_GENE
     result = []
     generation = fitness [0][master.FIT_GENERATION]
@@ -61,14 +79,16 @@ def summarise_fitness (fitness):
             # print '---------------------'
             # print nextd
             # print '---------------------'
-            result.append ([generation] + [numpy.mean (v) for v in data] + [numpy.std (v) for v in data])
+            #result.append ([generation] + [numpy.mean (v) for v in data] + [numpy.std (v) for v in data])
+            result.append (row_result ())
             generation = row [master.FIT_GENERATION]
             data = [[] for _ in xrange (number_genes + 1)]
         for index in xrange (number_genes):
             data [index].append (row [master.FIT_CHROMOSOME_GENE + index])
         data [number_genes].append (row [master.FIT_FITNESS])
         # print "  grow to  ", data
-    result.append ([generation] + [numpy.mean (v) for v in data] + [numpy.std (v) for v in data])
+    #result.append ([generation] + [numpy.mean (v) for v in data] + [numpy.std (v) for v in data])
+    result.append (row_result ())
     return result
 
 SUMEVA_GENERATION = 0
@@ -95,11 +115,15 @@ def summarise_evaluation (evaluation):
 
 def plot_value_vs_chromosome_gene (evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None):
     matplotlib.pyplot.clf ()
-    matplotlib.pyplot.plot (
+    matplotlib.pyplot.scatter (
         [r [evaluator.EVA_CHROMOSOME_GENES + chromosome_gene_index] for r in evaluation],
         [r [evaluator.EVA_VALUE] for r in evaluation],
-        'o'
+        c = [r [evaluator.EVA_GENERATION] for r in evaluation],
+        edgecolors = 'face',
+        alpha = 0.5
         )
+    cb = matplotlib.pyplot.colorbar ()
+    cb.set_label ('generation')
     matplotlib.pyplot.title ('evaluation value versus %s \n%s' % (chromosome_gene_name, subtitle))
     matplotlib.pyplot.xlabel (chromosome_gene_name)
     matplotlib.pyplot.ylabel ('value')
@@ -110,11 +134,16 @@ def plot_value_vs_chromosome_gene (evaluation, chromosome_gene_index, chromosome
 
 def plot_fitness_vs_chromosome_gene (summarised_evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None):
     matplotlib.pyplot.clf ()
-    matplotlib.pyplot.plot (
+    matplotlib.pyplot.scatter (
         [r [SUMEVA_CHROMOSOME_GENES + chromosome_gene_index] for r in summarised_evaluation],
         [r [SUMEVA_MEAN] for r in summarised_evaluation],
-        'o'
+        c = [r [SUMEVA_GENERATION] for r in summarised_evaluation],
+        edgecolors = 'face',
+        alpha = 0.5
+        #'o'
         )
+    cb = matplotlib.pyplot.colorbar ()
+    cb.set_label ('generation')
     matplotlib.pyplot.title ('fitness versus %s\n%s' % (chromosome_gene_name, subtitle))
     matplotlib.pyplot.xlabel (chromosome_gene_name)
     matplotlib.pyplot.ylabel ('fitness')
@@ -125,10 +154,10 @@ def plot_fitness_vs_chromosome_gene (summarised_evaluation, chromosome_gene_inde
 
 
 def plot_value_range_vs_chromosome_gene (summarised_evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None):
-    max_generations = max ([r [SUMEVA_GENERATION] for r in summarised_evaluation])
-    colors = [(2.0 * r [SUMEVA_GENERATION] / max_generations if r [SUMEVA_GENERATION] <  max_generations / 2 else 1.0 ,
-               2.0 * (max_generations - r [SUMEVA_GENERATION]) / max_generations if r [SUMEVA_GENERATION] >= max_generations / 2 else 1.0 ,
-                   0.0) for r in summarised_evaluation]
+    # max_generations = max ([r [SUMEVA_GENERATION] for r in summarised_evaluation])
+    # colors = [(2.0 * r [SUMEVA_GENERATION] / max_generations if r [SUMEVA_GENERATION] <  max_generations / 2 else 1.0 ,
+    #            2.0 * (max_generations - r [SUMEVA_GENERATION]) / max_generations if r [SUMEVA_GENERATION] >= max_generations / 2 else 1.0 ,
+    #                0.0) for r in summarised_evaluation]
     # for c in colors:
     #     print c, "\t",
     # print
@@ -137,13 +166,18 @@ def plot_value_range_vs_chromosome_gene (summarised_evaluation, chromosome_gene_
         [r [SUMEVA_CHROMOSOME_GENES + chromosome_gene_index] for r in summarised_evaluation],
         [r [SUMEVA_MIN] for r in summarised_evaluation],
         [r [SUMEVA_MAX] for r in summarised_evaluation],
-        colors = 'blue'
+        colors = 'black'
         )
-    matplotlib.pyplot.plot (
+    pc = matplotlib.pyplot.scatter (
         [r [SUMEVA_CHROMOSOME_GENES + chromosome_gene_index] for r in summarised_evaluation],
         [r [SUMEVA_MEAN] for r in summarised_evaluation],
-        'bo'
+        c = [r [SUMEVA_GENERATION] for r in summarised_evaluation],
+        edgecolors = 'face',
+        alpha = 0.5
         )
+    print pc.get_cmap ()
+    cb = matplotlib.pyplot.colorbar ()
+    cb.set_label ('generation')
     matplotlib.pyplot.title ('value range versus %s\n%s' % (chromosome_gene_name, subtitle))
     matplotlib.pyplot.xlabel (chromosome_gene_name)
     matplotlib.pyplot.ylabel ('value')
@@ -203,10 +237,31 @@ def plot_histogram_fitness_noise (summarised_evaluation, subtitle):
     """
     noise = [s [SUMEVA_MAX] - s [SUMEVA_MIN] for s in summarised_evaluation]
     matplotlib.pyplot.clf ()
-    matplotlib.pyplot.hist (noise, bins = MAX_EVALUATION_VALUE)
-    matplotlib.pyplot.title ('Histogram of distance between lowest and highest evaluation value')
+    matplotlib.pyplot.hist (noise, bins = MAX_EVALUATION_VALUE + 1)
+    matplotlib.pyplot.xlim ([0, MAX_EVALUATION_VALUE])
+    matplotlib.pyplot.title ('Histogram of distance between lowest and highest evaluation value\n' + subtitle)
     matplotlib.pyplot.savefig ('histogram-fitness-noise.png')
 
+def plot_evaluation_value_vs_episode_iteration (evaluation, subtitle, config):
+    """
+    Plot the evaluation value versus episode iteration to check how tired bees are or if they are behaving as sitters."""
+    matplotlib.pyplot.clf ()
+    matplotlib.pyplot.scatter (
+        [r [evaluator.EVA_ITERATION]  for r in evaluation],
+        [r [evaluator.EVA_VALUE]      for r in evaluation],
+        c = [r [evaluator.EVA_GENERATION] for r in evaluation],
+        edgecolors = 'face',
+        alpha = 0.5
+        )
+    matplotlib.pyplot.title ('evaluation value vs episode iteration\n' + subtitle)
+    matplotlib.pyplot.xlabel ('iteration')
+    matplotlib.pyplot.ylabel ('value')
+    matplotlib.pyplot.xlim ([-0.5, config.number_evaluations_per_episode + 0.5])
+    matplotlib.pyplot.ylim ([0, MAX_EVALUATION_VALUE])
+    cb = matplotlib.pyplot.colorbar ()
+    cb.set_label ('generation')
+    matplotlib.pyplot.savefig ('evaluation-value-VS-episode-iteration.png')
+    
 def parse_arguments ():
     parser = argparse.ArgumentParser (
         description = 'Analyse data produced by the evovibe program',
@@ -218,12 +273,19 @@ def parse_arguments ():
         type = str,
         help = 'subtitle to add to all graphs'
     )
+    parser.add_argument (
+    '--config', '-c',
+        default = '',
+        type = str,
+        help = 'configuration file name'
+    )
     return parser.parse_args ()
 
 subtitle = 'with elitism'
 #subtitle = 'no elitism'
 args = parse_arguments ()
 subtitle = args.subtitle
+cfg = config.Config (args.config)
 
 evaluation = read_evaluation_file ()
 fitness = read_fitness_file ()
@@ -236,3 +298,4 @@ plot_value_range_vs_chromosome_gene (se, 0, 'frequency', subtitle, FREQUENCY_DOM
 plot_population_fitness_vs_generation (sf, subtitle)
 plot_chromosome_gene_vs_generation (sf, 0, 'frequency', subtitle, FREQUENCY_DOMAIN)
 plot_histogram_fitness_noise (se, subtitle)
+plot_evaluation_value_vs_episode_iteration (evaluation [1], subtitle, cfg)

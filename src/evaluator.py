@@ -60,7 +60,6 @@ class Evaluator:
         """
         Evaluate a population.  This is the main method of this class and the one that is used by the evaluator function of the ES class of inspyred package.
         """
-        self.generation_number += 1
         if len (candidates) == self.config.population_size:
             with open (self.experiment_folder + "population.csv", 'a') as fp:
                 f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONE, quotechar = '"')
@@ -73,6 +72,7 @@ class Evaluator:
                 fp.close ()
         result = [self.chromosome_fitness (chromosome) for chromosome in candidates]
         print ("Generation ", self.generation_number, "  Population fitness: " , result)
+        self.generation_number += 1
         return result
         
     # def chromosome_fitness_XXX (self, chromosome):
@@ -124,10 +124,6 @@ class Evaluator:
     def evr_average_without_best_worst (self, values):
         """
         Reduce evaluation values by taking the best and worst and then computing the average"""
-        print "evr_average_without_best_worst"
-        print "evr_average_without_best_worst"
-        print "evr_average_without_best_worst"
-        print "evr_average_without_best_worst"
         return (sum (values) - max (values) - min (values)) / (self.config.number_evaluations_per_chromosome - 2)
 
     def evr_weighted_average (self, values):

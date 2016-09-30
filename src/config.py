@@ -33,7 +33,7 @@ class Config (best_config.Config):
     Length of bees workday length in seconds.  After this time has elapsed, bees have to go home to rest and get fed.
     """
 
-    def __init__ (self):
+    def __init__ (self, filename = 'config'):
         best_config.Config.__init__ (self, [
             Parameter ('number_bees',                    'Number of bees', parse_data = int),
             Parameter ('number_generations',             'Number of generations of the evolutionary algorithm', parse_data = int),
@@ -123,8 +123,8 @@ Which method to use when computing the chromosome fitness from a set of evaluati
             ])
         self.image_width = 600
         self.image_height = 600
-        if os.path.isfile ('config'):
-            self.load_from_yaml_file ('config')
+        if os.path.isfile (filename):
+            self.load_from_yaml_file (filename)
         else:
             self.ask_user ()
         if self.sound_hardware == 'Graz':
