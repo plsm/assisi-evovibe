@@ -79,6 +79,9 @@ class ContinueObserver:
 
 def continue_evolution (evolutionary_computation, population_parents, population_offsprings, parents_fitness, offspring_fitness,
                         generator, evaluator, number_generations, maximize=True, bounder=None, **args):
+    '''
+    Parameter number_generations Number of generations that have been processed by the observers.
+    '''
 
     #(len (population_parents) != len (parents_fitness) or (len (population_parents) == len (population_offsprings) >= len (offspring_fitness))) and \
         # "if for every parent there is a fitness then " + \
@@ -115,10 +118,11 @@ def continue_evolution (evolutionary_computation, population_parents, population
             nv = [evolutionary_computation.variator] + [cv.variator]
         evolutionary_computation.variator = nv
     if isinstance (evolutionary_computation.observer, collections.Iterable):
-        N = len (evolutionary_computation.observer)
-        nlo = [ContinueObserver (o, number_generations, 0).observer for o in evolutionary_computation.observer]
+        N = len (evolutionary_computation.observer) if len (offspring_fitness) > 0 else 0
+        nlo = [ContinueObserver (o, number_generations, N).observer for o in evolutionary_computation.observer]
     else:
-        nlo = [ContinueObserver (evolutionary_computation.observer, number_generations, 0).observer]
+        N = 1 if len (offspring_fitness) > 0 else 0
+        nlo = [ContinueObserver (evolutionary_computation.observer, number_generations, N).observer]
     evolutionary_computation.observer = nlo
     return evolutionary_computation.evolve (
         generator,

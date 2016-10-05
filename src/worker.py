@@ -51,12 +51,7 @@ def cmd_initialise ():
     sound_hardware = message [4]
     chromosome_type = message [5]
     if sound_hardware == 'Zagreb':
-        if chromosome_type == "SinglePulseGenePause":
-            run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
-        elif chromosome_type == "SinglePulseGeneFrequency":
-            run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model
-        elif chromosome_type == "SinglePulseGenesPulse":
-            run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
+        run_vibration_model = chromosome.CHROMOSOME_METHODS [chromosome_type].run_vibration_model [sound_hardware]
     elif sound_hardware == 'Graz':
         run_vibration_model = None
     a_casu.set_temp (CASU_TEMPERATURE)

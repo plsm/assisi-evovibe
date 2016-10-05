@@ -97,7 +97,7 @@ def create_experimental_run_files (experiment_folder):
         fp.close ()
     with open (experiment_folder + "evaluation.csv", 'w') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-        row = ["evaluation", "episode", "iteration", "selected_arena", "active_casu", "value", "chromosome_genes"]
+        row = ["generation", "episode", "iteration", "selected_arena", "active_casu", "value", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
     with open (experiment_folder + "fitness.csv", 'w') as fp:
@@ -157,6 +157,9 @@ def population_to_continue (config, experiment_folder):
     else:
         population_parents    = [r[evaluator.POP_CHROMOSOME_GENES:] for r in rows_population [-config.population_size:]]
         population_offsprings = []
+    # convert all genes to integers
+    population_parents    = [[int (g) for g in c] for c in population_parents]
+    population_offsprings = [[int (g) for g in c] for c in population_offsprings]
     last_generation = int (rows_population [-1][evaluator.POP_GENERATION])
     return (population_parents, population_offsprings, last_generation)
 
@@ -167,14 +170,14 @@ def fitness_to_continue (config, experiment_folder):
         rows_fitness = [row for row in f]
         fp.close ()
     if rows_fitness == []:
-        last_generation_number = -1
+        last_generation_number = 0
         last_episode_number = 0
         parents_fitness   = []
         offspring_fitness = []
     else:
         last_generation_number = int (rows_fitness [-1][evaluator.PRT_GENERATION])
         last_episode_number = int (rows_fitness [-1][evaluator.PRT_EPISODE])
-        if last_generation_number > 1:
+        if last_generation_number > 0:
             parents_fitness   = [r[evaluator.PRT_FITNESS] for r in rows_fitness if r[evaluator.PRT_GENERATION] == last_generation_number - 1]
             offspring_fitness = [r[evaluator.PRT_FITNESS] for r in rows_fitness if r[evaluator.PRT_GENERATION] == last_generation_number]
         else:
@@ -201,15 +204,23 @@ def initialise_data_for_inspyred (config, worker_stubs, experiment_folder, curre
     evolutionary_algorithm = inspyred.ec.ES (random.Random ())
     evolutionary_algorithm.terminator = [inspyred.ec.terminators.generation_termination]
     evolutionary_algorithm.observer = [fitness_save_observer]
-    if config.chromosome_type == "SinglePulseGenePause":
-        evolutionary_algorithm.variator = [chromosome.SinglePulseGenePause.get_variator ()]
-        generator = chromosome.SinglePulseGenePause.random_generator
-    elif config.chromosome_type == "SinglePulseGeneFrequency":
-        evolutionary_algorithm.variator = [chromosome.SinglePulseGeneFrequency.get_variator ()]
-        generator = chromosome.SinglePulseGeneFrequency.random_generator
-    elif config.chromosome_type == "SinglePulseGenesPulse":
-        evolutionary_algorithm.variator = [chromosome.SinglePulseGenesPulse.get_variator ()]
-        generator = chromosome.SinglePulseGenesPulse.random_generator
+    evolutionary_algorithm.variator = [chromosome.CHROMOSOME_METHODS [config.chromosome_type].variator ()]
+    generator = chromosome.CHROMOSOME_METHODS [config.chromosome_type].generator
+    # if config.chromosome_type == "SinglePulseGenePause":
+    #     evolutionary_algorithm.variator = [chromosome.SinglePulseGenePause.get_variator ()]
+    #     generator = chromosome.SinglePulseGenePause.random_generator
+    # elif config.chromosome_type == "SinglePulseGeneFrequency":
+    #     evolutionary_algorithm.variator = [chromosome.SinglePulseGeneFrequency.get_variator ()]
+    #     generator = chromosome.SinglePulseGeneFrequency.random_generator
+    # elif config.chromosome_type == "SinglePulseGenesPulse":
+    #     evolutionary_algorithm.variator = [chromosome.SinglePulseGenesPulse.get_variator ()]
+    #     generator = chromosome.SinglePulseGenesPulse.random_generator
+    # elif config.chromosome_type == "SinglePulse1sGenesFrequencyPause":
+    #     evolutionary_algorithm.variator = [chromosome.SinglePulse1sGenesFrequencyPause.get_variator ()]
+    #     generator = chromosome.SinglePulse1sGenesFrequencyPause.random_generator
+    # else:
+    #     print "Unkown chromosome:", config.chromosome_type
+    #     sys.exit (1)
     return (epsd, evltr, evolutionary_algorithm, generator)
 
 def new_run (config, worker_stubs, experiment_folder):
@@ -230,18 +241,12 @@ def new_run (config, worker_stubs, experiment_folder):
 
 def continue_run (config, worker_stubs, experiment_folder):
     population_parents, population_offsprings, last_generation_number = population_to_continue (config, experiment_folder)
-    parents_fitness, offspring_fitness, _c, last_episode = fitness_to_continue (config, experiment_folder)
-    # print "population_parents", population_parents, "\n"
-    # print "population_offsprigns", population_offsprings, "\n"
-    # print "parents_fitness", parents_fitness, "\n"
-    # print "offspring_fitness", offspring_fitness, "\n"
-    # print "last_generation_number", last_generation_number
-    # print "last_episode", last_episode
-    # raw_input ('Press ENTER to continue')
+    parents_fitness, offspring_fitness, _c, last_episode_number = fitness_to_continue (config, experiment_folder)
+    report_previous_run_data (population_parents, population_offsprings, last_generation_number, parents_fitness, offspring_fitness, last_episode_number)
     epsd, evltr, evolutionary_algorithm, generator = initialise_data_for_inspyred (
         config, worker_stubs, experiment_folder,
-        last_generation_number - (0 if len (population_parents) == len (parents_fitness) and len (population_offsprings) == 0 else 1),
-        last_episode + 1)
+        last_generation_number + (1 if len (population_parents) == len (parents_fitness) and len (population_offsprings) == 0 else 0),
+        last_episode_number + 1)
     continue_inspyred.continue_evolution (
         evolutionary_algorithm,
         population_parents = population_parents,
@@ -250,16 +255,38 @@ def continue_run (config, worker_stubs, experiment_folder):
         offspring_fitness = offspring_fitness,
         generator = generator,
         evaluator = evltr.population_evaluator,
-        number_generations = last_generation_number,
+        number_generations = last_generation_number - 1 if len (population_offsprings) > 0 else 0,
         maximize = True,
         bounder = None,
-        max_generations = max (0, config.number_generations - last_generation_number),
+        max_generations = max (0, config.number_generations - last_generation_number + 1),
         config_experiment_folder = experiment_folder
         )
     epsd.finish (True)
     for ws in worker_stubs.values ():
         ws.terminate_session ()
     print ("Evolutionary Strategy algorithm finished!")
+
+def report_previous_run_data (population_parents, population_offsprings, last_generation_number, parents_fitness, offspring_fitness, last_episode_number):
+    print ("\n\n* ** Previous Run Data ** *")
+    for l, c, f in [('parents', population_parents, parents_fitness), ('offspring', population_offsprings, offspring_fitness)]:
+        print ("  population " + l)
+        if c == []:
+            print ("    EMPTY")
+        else:
+            for index in xrange (len (c)):
+                if index < len (f):
+                    fs = "%7.1f" % f [index]
+                else:
+                    fs = "       "
+                cs = ''
+                for g in c [index]:
+                    if cs != '':
+                        cs = '%s , ' % cs
+                    cs = '%s%7d' % (cs, g)
+                print ("    %s  [ %s ]" % (fs, cs))
+    print "  last generation", last_generation_number
+    print "  last episode", last_episode_number
+    raw_input ("Press ENTER to continue")
 
 # def run_inspyred (config, worker_stubs, experiment_folder, current_generation = 1, episode_index = 1, seeds = None, eva_values = None):
 #     """

@@ -5,6 +5,7 @@ from __future__ import print_function
 
 import os
 import functools
+import sys
 
 import chromosome
 import best_config
@@ -127,20 +128,35 @@ Which method to use when computing the chromosome fitness from a set of evaluati
             self.load_from_yaml_file (filename)
         else:
             self.ask_user ()
-        if self.sound_hardware == 'Graz':
-            if self.chromosome_type == "SinglePulseGenePause":
-                self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model_v2
-            elif self.chromosome_type == "SinglePulseGeneFrequency":
-                self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model_v2
-            elif self.chromosome_type == "SinglePulseGenesPulse":
-                self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model_v2
-        elif self.sound_hardware == 'Zagreb':
-            if self.chromosome_type == "SinglePulseGenePause":
-                self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
-            elif self.chromosome_type == "SinglePulseGeneFrequency":
-                self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model
-            elif self.chromosome_type == "SinglePulseGenesPulse":
-                self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
+        try:
+            cm = None
+            cm = chromosome.CHROMOSOME_METHODS [self.chromosome_type]
+            self.run_vibration_model = cm.run_vibration_model [self.sound_hardware]
+        except KeyError as e:
+            if cm is None:
+                print ('Invalid chromosome type', self.chromosome_type)
+            else:
+                print ('Invalid sound hardware', self.sound_hardware)
+            print (chromosome.CHROMOSOME_METHODS)
+            sys.exit (1)
+        # if self.sound_hardware == 'Graz':
+        #     if self.chromosome_type == "SinglePulseGenePause":
+        #         self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model_v2
+        #     elif self.chromosome_type == "SinglePulseGeneFrequency":
+        #         self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model_v2
+        #     elif self.chromosome_type == "SinglePulseGenesPulse":
+        #         self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model_v2
+        #     elif self.chromosome_type == "SinglePulse1sGenesFrequencyPause":
+        #         self.run_vibration_model = chromosome.SinglePulse1sGenesFrequencyPause.run_vibration_model_v2
+        # elif self.sound_hardware == 'Zagreb':
+        #     if self.chromosome_type == "SinglePulseGenePause":
+        #         self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
+        #     elif self.chromosome_type == "SinglePulseGeneFrequency":
+        #         self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model
+        #     elif self.chromosome_type == "SinglePulseGenesPulse":
+        #         self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
+        #     elif self.chromosome_type == "SinglePulse1sGenesFrequencyPause":
+        #         self.run_vibration_model = chromosome.SinglePulse1sGenesFrequencyPause.run_vibration_model
         if self.vibration_period != -1:
             chromosome.SinglePulseGeneFrequency.VIBRATION_PERIOD = self.vibration_period
 

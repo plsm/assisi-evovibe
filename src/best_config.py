@@ -80,7 +80,10 @@ class Config:
         return result
     
     def __getattr__ (self, name):
-        p = self.parameters_as_dict [name]
+        try:
+            p = self.parameters_as_dict [name]
+        except KeyError:
+            raise AttributeError
         if not p.has_value:
             raise AttributeError
         return p.value
