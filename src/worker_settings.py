@@ -61,7 +61,15 @@ class WorkerSettings:
         self.socket = context.socket (zmq.REQ)
         self.socket.connect (self.wrk_addr)
         print ("Initializing worker responsible for casu #%d..." % (self.casu_number))
-        answer = zmq_sock_utils.send_recv (self.socket, [worker.INITIALISE, config.evaluation_run_time, config.spreading_waiting_time, config.frame_per_second, config.sound_hardware, config.chromosome_type])
+        answer = zmq_sock_utils.send_recv (self.socket, [
+            worker.INITIALISE,
+            config.vibration_run_time,
+            config.no_stimulus_run_time,
+            config.number_repetitions,
+            config.spreading_waiting_time,
+            config.frame_per_second,
+            config.sound_hardware,
+            config.chromosome_type])
         print ("Worker responded with: %s" % (str (answer)))
         return (self.casu_number, self)
     def terminate_session (self):

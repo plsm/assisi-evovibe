@@ -35,6 +35,7 @@ class Parameter:
         """
         Load a parameter value from the given dictionary.
         """
+        pause = False
         try:
             for n in self.path_in_dictionary:
                 dictionary = dictionary [n]
@@ -45,8 +46,10 @@ class Parameter:
             else:
                 print "Using default value %s for %s!" % (self.default_value, self.name)
                 self.value = self.default_value
+                pause = True
         finally:
             self.has_value = True
+        return pause
 
     def ask_user (self):
         while True:
@@ -68,8 +71,12 @@ class Config:
         file_object = open (filename, 'r')
         dictionary = yaml.load (file_object)
         file_object.close ()
+        pause = False
         for p in self.parameters_as_list:
-            p.load_from_dictionary (dictionary)
+            result = p.load_from_dictionary (dictionary)
+            pause = pause or result
+        if pause:
+            raw_input ('Press ENTER to continue')
 
     def ask_user (self):
         for p in self.parameters_as_list:
@@ -83,9 +90,9 @@ class Config:
         try:
             p = self.parameters_as_dict [name]
         except KeyError:
-            raise AttributeError
+            raise AttributeError (name)
         if not p.has_value:
-            raise AttributeError
+            raise AttributeError (name)
         return p.value
 
     def __str__ (self):
@@ -95,6 +102,7 @@ class Config:
                 for b in p.path_in_dictionary:
                     result += b + ' : '
                 result += p.name + ' : ' + str (p.value) + '\n'
+#                result += p.name + ' : ' + str (self.__getattr__ (p.name)) + '\n'
         return result
 
 if __name__ == '__main__':

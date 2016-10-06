@@ -46,7 +46,8 @@ class Evaluator:
         self.episode = episode
         self.experiment_folder = experiment_folder
         self.generation_number = generation_number
-        self.number_analysed_frames = (int) (self.config.evaluation_run_time * self.config.frame_per_second)
+        self.number_analysed_frames = (int) (self.config._evaluation_run_time * self.config.frame_per_second)
+        # initialise the evaluation values reduce function
         if self.config.evaluation_values_reduce == 'average':
             self._evaluation_values_reduce = self.evr_average
         elif self.config.evaluation_values_reduce == 'average_without_best_worst':
@@ -54,7 +55,25 @@ class Evaluator:
         elif self.config.evaluation_values_reduce == 'weighted_average':
             self._evaluation_values_reduce = self.evr_weighted_average
         else:
-            raise Exception ("Invalid evaluation values reduce: " + str (self.config.evaluation_values_reduce))
+            raise Exception ("Invalid evaluation values reduce function: " + str (self.config.evaluation_values_reduce))
+        # initialise the evaluation image processing function
+        if self.config.fitness_function == 'stopped_frames':
+            self._image_processing_function_vibration = self.ipf_stopped_frames
+            self._image_processing_function_no_stimulus = None
+        elif self.config.fitness_function == 'penalize_passive_casu':
+            self._image_processing_function_vibration = self.ipf_penalize_passive_casu
+            self._image_processing_function_no_stimulus = None
+        elif self.config.fitness_function == 'background_bees_active_minus_passive':
+            self._image_processing_function_vibration = self.ipf_background_bees_active_minus_passive
+            self._image_processing_function_no_stimulus = None
+        elif self.config.fitness_function == 'frames_with_no_movement_active_casu_roi':
+            self._image_processing_function_vibration = self.ipf_frames_with_no_movement_active_casu_roi
+            self._image_processing_function_no_stimulus = None
+        elif self.config.fitness_function == 'frames_with_no_movement_active_passive_casu_rois':
+            self._image_processing_function_vibration = self.ipf_frames_with_no_movement_active_passive_casu_rois
+            self._image_processing_function_no_stimulus = None
+        else:
+            raise Exception ("Invalid evaluation image processing function: " + str (self.config.fitness_function))
 
     def population_evaluator (self, candidates, args = None):
         """
@@ -161,7 +180,7 @@ class Evaluator:
         :return: a tuple with the process that records the iteration the video filename
         """
         print "\n\n* ** Starting Iteration Video..."
-        num_buffers = (self.config.evaluation_run_time + self.config.spreading_waiting_time) * self.config.frame_per_second
+        num_buffers = (self.config._evaluation_run_time + self.config.spreading_waiting_time) * self.config.frame_per_second
         filename_real = self.episode.current_path + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
         bashCommand_video = 'gst-launch-0.10' + \
                             ' --gst-plugin-path=/usr/local/lib/gstreamer-0.10/' + \
@@ -217,16 +236,97 @@ class Evaluator:
         """
         Compute the evaluation of the current chromosome.  This depends on the fitness function property of the configuration file.
         """
-        if self.config.fitness_function == 'stopped_frames':
-            return self.stopped_frames (picked_arena)
-        elif self.config.fitness_function == 'penalize_passive_casu':
-            return self.penalize_passive_casu (picked_arena)
-        elif self.config.fitness_function == 'background_bees_active_minus_passive':
-            return self.background_bees_active_minus_passive (picked_arena)
-        elif self.config.fitness_function == 'frames_with_no_movement_active_casu_roi':
-            return self.frames_with_no_movement_active_casu_roi (picked_arena)
-        elif self.config.fitness_function == 'frames_with_no_movement_active_passive_casu_rois':
-            return self.frames_with_no_movement_active_passive_casu_rois (picked_arena)
+        # if self.config.fitness_function == 'stopped_frames':
+        #     return self.stopped_frames (picked_arena)
+        # elif self.config.fitness_function == 'penalize_passive_casu':
+        #     return self.penalize_passive_casu (picked_arena)
+        # elif self.config.fitness_function == 'background_bees_active_minus_passive':
+        #     return self.background_bees_active_minus_passive (picked_arena)
+        # elif self.config.fitness_function == 'frames_with_no_movement_active_casu_roi':
+        #     return self.frames_with_no_movement_active_casu_roi (picked_arena)
+        # elif self.config.fitness_function == 'frames_with_no_movement_active_passive_casu_rois':
+        #     return self.frames_with_no_movement_active_passive_casu_rois (picked_arena)
+        time = 0
+        step = 1.0 / self.config.frame_per_second
+        vibration_segment = True
+        result = 0
+        message = []
+        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next () # skip header row
+            freader.next () # skip frame with initial blip
+            for row in freader:
+                time += step
+                if vibration_segment:
+                    result += self._image_processing_function_vibration (picked_arena, row)
+                    if time >= self.config.vibration_run_time:
+                        message.append ('vibration segment with %d frames' % (int (time / step)))
+                        vibration_segment = False
+                        time = 0
+                else:
+                    if self._image_processing_function_no_stimulus is not None:
+                        result += self._image_processing_function_no_stimulus (picked_arena, row)
+                    if time >= self.config.no_stimulus_run_time:
+                        message.append ('no stimulus segment with %d frames' % (int (time / step)))
+                        vibration_segment = True
+                        time = 0
+            fp.close ()
+        if time != 0:
+            if vibration_segment:
+                message.append ('vibration segment with %d frames' % int (time / step))
+            else:
+                message.append ('no stimulus segment with %d frames' % (int (time / step)))
+        print '    Processed:', message
+        return result
+
+    def ipf_stopped_frames (self, picked_arena, row):
+        """
+        In this function we see if the number of pixels that are different
+        in two consecutive frames is lower than a certain threshold, and if
+        there are many bees in that frame.  If the condition holds, we
+        return the number of pixels that are different compared to the
+        background.
+        """
+        if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+            return row [picked_arena.selected_worker_index * 2]
+        else:
+            return 0
+
+    def ipf_frames_with_no_movement_active_casu_roi (self, picked_arena, row):
+        """
+        In this function we count how many frames where there is no
+        movement in the active CASU ROI.  The result is the number of
+        frames.
+        """
+        if row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+            return 1
+        else:
+            return 0
+
+    def ipf_frames_with_no_movement_active_passive_casu_rois (self, picked_arena, row):
+        """
+        In this function we count how many frames where there is no
+        movement in the active CASU ROI, and we count how many frames where
+        there is no movement in the passive CASU ROI.  The result is the
+        sum of the first count minus the sum of the second count.
+
+        This function requires an arena with two CASUs.
+        """
+        return \
+            +(1 if  row [     picked_arena.selected_worker_index  * 2 + 1] < self.config.pixel_count_previous_frame_threshold else 0) \
+            -(1 if  row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold else 0)
+
+    def ipf_penalize_passive_casu (self, picked_arena, row):
+        """
+        In this function we see if the number of pixels that are different
+        in two consecutive frames is lower than a certain threshold, and if
+        there are many bees in that frame.
+
+        This function requires an arena with two CASUs.
+        """
+        return \
+            + (row [     picked_arena.selected_worker_index  * 2] if row [     picked_arena.selected_worker_index  * 2] > self.config.pixel_count_background_threshold and row [     picked_arena.selected_worker_index  * 2 + 1] < self.config.pixel_count_previous_frame_threshold else 0) \
+            - (row [(1 - picked_arena.selected_worker_index) * 2] if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.pixel_count_background_threshold and row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold else 0)
 
     def background_bees_active_minus_passive (self, picked_arena):
         """

@@ -24,6 +24,9 @@ WORKER_OK              = 1000
 CASU_TEMPERATURE = 28
 
 evaluation_run_time = None
+vibration_run_time = None
+no_stimulus_run_time = None
+number_repetitions = None
 spreading_waiting_time = None
 frame_per_second = None
 run_vibration_model = None
@@ -36,24 +39,30 @@ def blip_casu ():
     a_casu.diagnostic_led_standby ()
     
 def cmd_initialise ():
-    if len (message) != 6:
+    if len (message) != 8:
         print ("Invalid initialisation message!\n" + str (message))
         a_casu.stop ()
         sys.exit (3)
     global evaluation_run_time
+    global vibration_run_time
+    global no_stimulus_run_time
+    global number_repetitions
     global spreading_waiting_time
     global frame_per_second
     global run_vibration_model
     print ("W%dC Initialisation message..." % casu_number)
-    evaluation_run_time = message [1]
-    spreading_waiting_time = message [2]
-    frame_per_second = message [3]
-    sound_hardware = message [4]
-    chromosome_type = message [5]
+    vibration_run_time     = message [1]
+    no_stimulus_run_time   = message [2]
+    number_repetitions     = message [3]
+    spreading_waiting_time = message [4]
+    frame_per_second       = message [5]
+    sound_hardware         = message [6]
+    chromosome_type        = message [7]
     if sound_hardware == 'Zagreb':
         run_vibration_model = chromosome.CHROMOSOME_METHODS [chromosome_type].run_vibration_model [sound_hardware]
     elif sound_hardware == 'Graz':
         run_vibration_model = None
+    evaluation_run_time = number_repetitions * (vibration_run_time + no_stimulus_run_time) + vibration_run_time
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.diagnostic_led_standby ()
     a_casu.airflow_standby ()
@@ -64,17 +73,19 @@ def cmd_initialise ():
 
 def cmd_active_casu ():
     print ("W%dC Active CASU..." % casu_number)
-    a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
-    time.sleep (2.0 / frame_per_second)
-    a_casu.diagnostic_led_standby ()
+    # a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
+    # time.sleep (2.0 / frame_per_second)
+    # a_casu.diagnostic_led_standby ()
+    blip_casu ()
     if run_vibration_model is None:
         time.sleep (evaluation_run_time) # sound hardware by Graz
     else:
-        run_vibration_model (message [1], a_casu, evaluation_run_time)
+        run_vibration_model (message [1], a_casu, vibration_run_time, no_stimulus_run_time, number_repetitions)
     a_casu.speaker_standby ()
-    a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
-    time.sleep (2.0 / frame_per_second)
-    a_casu.diagnostic_led_standby ()
+    # a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
+    # time.sleep (2.0 / frame_per_second)
+    # a_casu.diagnostic_led_standby ()
+    blip_casu ()
     print ("W%dC Spreading..." % (casu_number))
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
@@ -86,9 +97,10 @@ def cmd_passive_casu ():
     print ("W%dC Passive CASU..." % casu_number)
     time.sleep (2.0 / frame_per_second)
     time.sleep (evaluation_run_time)
-    a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
-    time.sleep (2.0 / frame_per_second)
-    a_casu.diagnostic_led_standby ()
+    # a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
+    # time.sleep (2.0 / frame_per_second)
+    # a_casu.diagnostic_led_standby ()
+    blip_casu ()
     print ("W%dC Spreading..." % (casu_number))
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
