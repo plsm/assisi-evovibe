@@ -58,14 +58,14 @@ class AbstractChromosome:
     random_generator (random, args)
     """
     @staticmethod
-    def run_vibration_model_Zagreb_SinglePulse (the_casu, vibration_run_time, no_stimulus_run_time, number_repetitions, pulse):
+    def run_vibration_model_Zagreb_SinglePulse (the_casu, vibration_run_time, no_stimuli_run_time, number_repetitions, pulse):
         '''
         Run a vibration model that has a single pulse.  The CASU vibrates for
-        vibration_run_time seconds followed by no_stimulus_run_time seconds
+        vibration_run_time seconds followed by no_stimuli_run_time seconds
         where there is no stimuls from the CASUs.  This is repeated
         number_repetitions times.  Finally the CASU vibrates for vibration_run_time seconds.
         '''
-        print 'running vibration model', vibration_run_time, no_stimulus_run_time, number_repetitions, pulse
+        print 'running vibration model', vibration_run_time, no_stimuli_run_time, number_repetitions, pulse
         vibe_periods = [pulse.vibration_period,  pulse.pause_period]
         vibe_freqs   = [       pulse.frequency,                   1]
         vibe_amps    = [       pulse.amplitude,                   0]
@@ -73,7 +73,7 @@ class AbstractChromosome:
             the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
             time.sleep (vibration_run_time)
             the_casu.speaker_standby ()
-            time.sleep (no_stimulus_run_time)
+            time.sleep (no_stimuli_run_time)
         print the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
         time.sleep (vibration_run_time)
         the_casu.speaker_standby ()
@@ -160,12 +160,12 @@ class SinglePulseGeneFrequency (AbstractChromosome):
     PAUSE_PERIOD = 100
 
     @staticmethod
-    def run_vibration_model (chromosome, the_casu, vibration_run_time, no_stimulus_run_time, number_repetitions):
+    def run_vibration_model (chromosome, the_casu, vibration_run_time, no_stimuli_run_time, number_repetitions):
         """
         Run the vibration model represented by the given SinglePulseGeneFrequency chromosome.
         """
         AbstractChromosome.run_vibration_model_Zagreb_SinglePulse (
-            the_casu, vibration_run_time, no_stimulus_run_time, number_repetitions,
+            the_casu, vibration_run_time, no_stimuli_run_time, number_repetitions,
             Pulse (
                 frequency        = chromosome [0],
                 pause_period     = SinglePulseGeneFrequency.PAUSE_PERIOD,
@@ -313,12 +313,12 @@ class SinglePulse1sGenesFrequencyPause (AbstractChromosome):
     PULSE_PERIOD = 1000
 
     @staticmethod
-    def run_vibration_model (chromosome, the_casu, vibration_run_time, no_stimulus_run_time, number_repetitions):
+    def run_vibration_model (chromosome, the_casu, vibration_run_time, no_stimuli_run_time, number_repetitions):
         """
         Run the vibration model represented by the given SinglePulseGenesPulse chromosome.
         """
         AbstractChromosome.run_vibration_model_Zagreb_SinglePulse (
-            the_casu, vibration_run_time, no_stimulus_run_time, number_repetitions,
+            the_casu, vibration_run_time, no_stimuli_run_time, number_repetitions,
             Pulse (
                 frequency        = chromosome [0],
                 pause_period     = chromosome [1],

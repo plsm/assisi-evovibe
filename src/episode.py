@@ -137,6 +137,7 @@ class Episode:
         """
         p = subprocess.Popen ([
             '/usr/bin/gimp',
+            '--no-data',
             self.current_path + "Background.jpg"])
         go = True
         self.arenas = []

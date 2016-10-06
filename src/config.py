@@ -37,10 +37,14 @@ class Config (best_config.Config):
     def __init__ (self, filename = 'config'):
         best_config.Config.__init__ (self, [
             Parameter ('number_bees',                    'Number of bees', parse_data = int),
+            Parameter ('bee_area_pixels',                'Number of pixels occupied by a bee', parse_data = int),
             Parameter ('number_generations',             'Number of generations of the evolutionary algorithm', parse_data = int),
             Parameter ('number_evaluations_per_episode', 'How many evaluations to perform with a set of bees', parse_data = int),
             Parameter ('bee_relax_time',                 'How many seconds to wait before testing the first vibration pattern in a set of bees', parse_data = int, default_value = 0),
-            Parameter ('evaluation_run_time',    'Time in seconds of the total vibration pattern', parse_data = int),
+            Parameter ('evaluation_run_time',    'Time in seconds of the total vibration pattern', parse_data = int, default_value = -1),
+            Parameter ('vibration_run_time',    'Time in seconds of the vibration segment'                    , parse_data = int, default_value = -1, path_in_dictionary = ['evaluation']),
+            Parameter ('no_stimuli_run_time',  'Time in seconds of the no stimuli segment'                  , parse_data = int, default_value = 0 , path_in_dictionary = ['evaluation']),
+            Parameter ('number_repetitions',    'Number of repetitions of vibration plus no stimuli segments', parse_data = int, default_value = 0 , path_in_dictionary = ['evaluation']),
             Parameter ('spreading_waiting_time',  'Time in seconds to spread the bees', parse_data = int),
             Parameter ('population_size', 'Population size of the evolutionary algorithm', parse_data = int),
             Parameter ('number_evaluations_per_chromosome',  'How many evaluations to perform with a chromosome', parse_data = int),
@@ -51,6 +55,7 @@ class Config (best_config.Config):
 3 - background bee pixels in active CASU ROI minus background bee pixels in passive CASU
 4 - number of frames with no movement in active CASU ROI
 5 - number of frames with no movement in active CASU ROI minus number of frames with no movement in passive CASU ROI
+6 - number of frames with no movement during vibration segments over number of frames with movement during no stimuli segments in active CASU ROI
 Which fitness function to use''',
                 parse_data = lambda x : best_config.list_element (
                     [
@@ -59,6 +64,7 @@ Which fitness function to use''',
                         , 'background_bees_active_minus_passive'
                         , 'frames_with_no_movement_active_casu_roi'
                         , 'frames_with_no_movement_active_passive_casu_rois'
+                        , 'ratio_frames_with_no_movement_vibration_over_no_stimuli'
                     ],
                     x)),
             Parameter (
@@ -137,35 +143,21 @@ Which method to use when computing the chromosome fitness from a set of evaluati
                 print ('Invalid chromosome type', self.chromosome_type)
             else:
                 print ('Invalid sound hardware', self.sound_hardware)
-            print (chromosome.CHROMOSOME_METHODS)
             sys.exit (1)
-        # if self.sound_hardware == 'Graz':
-        #     if self.chromosome_type == "SinglePulseGenePause":
-        #         self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model_v2
-        #     elif self.chromosome_type == "SinglePulseGeneFrequency":
-        #         self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model_v2
-        #     elif self.chromosome_type == "SinglePulseGenesPulse":
-        #         self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model_v2
-        #     elif self.chromosome_type == "SinglePulse1sGenesFrequencyPause":
-        #         self.run_vibration_model = chromosome.SinglePulse1sGenesFrequencyPause.run_vibration_model_v2
-        # elif self.sound_hardware == 'Zagreb':
-        #     if self.chromosome_type == "SinglePulseGenePause":
-        #         self.run_vibration_model = chromosome.SinglePulseGenePause.run_vibration_model
-        #     elif self.chromosome_type == "SinglePulseGeneFrequency":
-        #         self.run_vibration_model = chromosome.SinglePulseGeneFrequency.run_vibration_model
-        #     elif self.chromosome_type == "SinglePulseGenesPulse":
-        #         self.run_vibration_model = chromosome.SinglePulseGenesPulse.run_vibration_model
-        #     elif self.chromosome_type == "SinglePulse1sGenesFrequencyPause":
-        #         self.run_vibration_model = chromosome.SinglePulse1sGenesFrequencyPause.run_vibration_model
         if self.vibration_period != -1:
             chromosome.SinglePulseGeneFrequency.VIBRATION_PERIOD = self.vibration_period
+        if self.vibration_run_time == -1:
+            self.parameters_as_dict ['vibration_run_time'].value = self.evaluation_run_time
+            print ('\nUsing deprecated configuration parameter \'evaluation_run_time\' for parameter \'vibration_run_time\'')
+            raw_input ('Press ENTER to continue')
+        self._evaluation_run_time = self.number_repetitions * (self.vibration_run_time + self.no_stimuli_run_time) + self.vibration_run_time
 
     def status (self):
         """
         Do a diagnosis of this experimental configuration.
         """
         print ("\n\n* ** Configuration Status ** *")
-        bwl = self.number_evaluations_per_episode * (self.evaluation_run_time + self.spreading_waiting_time)
+        bwl = self.number_evaluations_per_episode * (self._evaluation_run_time + self.spreading_waiting_time)
         print ("Bees are going to work %d:%d" % (bwl / 60, bwl % 60), end='')
         if bwl > Config.BEE_WORKDAY_LENGTH:
             print (", which is %d%% more than their workday length." % (int ((bwl - Config.BEE_WORKDAY_LENGTH) * 100.0 / Config.BEE_WORKDAY_LENGTH)))

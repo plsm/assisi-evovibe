@@ -64,7 +64,7 @@ class WorkerSettings:
         answer = zmq_sock_utils.send_recv (self.socket, [
             worker.INITIALISE,
             config.vibration_run_time,
-            config.no_stimulus_run_time,
+            config.no_stimuli_run_time,
             config.number_repetitions,
             config.spreading_waiting_time,
             config.frame_per_second,

@@ -25,7 +25,7 @@ CASU_TEMPERATURE = 28
 
 evaluation_run_time = None
 vibration_run_time = None
-no_stimulus_run_time = None
+no_stimuli_run_time = None
 number_repetitions = None
 spreading_waiting_time = None
 frame_per_second = None
@@ -45,14 +45,14 @@ def cmd_initialise ():
         sys.exit (3)
     global evaluation_run_time
     global vibration_run_time
-    global no_stimulus_run_time
+    global no_stimuli_run_time
     global number_repetitions
     global spreading_waiting_time
     global frame_per_second
     global run_vibration_model
     print ("W%dC Initialisation message..." % casu_number)
     vibration_run_time     = message [1]
-    no_stimulus_run_time   = message [2]
+    no_stimuli_run_time   = message [2]
     number_repetitions     = message [3]
     spreading_waiting_time = message [4]
     frame_per_second       = message [5]
@@ -62,7 +62,7 @@ def cmd_initialise ():
         run_vibration_model = chromosome.CHROMOSOME_METHODS [chromosome_type].run_vibration_model [sound_hardware]
     elif sound_hardware == 'Graz':
         run_vibration_model = None
-    evaluation_run_time = number_repetitions * (vibration_run_time + no_stimulus_run_time) + vibration_run_time
+    evaluation_run_time = number_repetitions * (vibration_run_time + no_stimuli_run_time) + vibration_run_time
     a_casu.set_temp (CASU_TEMPERATURE)
     a_casu.diagnostic_led_standby ()
     a_casu.airflow_standby ()
@@ -80,7 +80,7 @@ def cmd_active_casu ():
     if run_vibration_model is None:
         time.sleep (evaluation_run_time) # sound hardware by Graz
     else:
-        run_vibration_model (message [1], a_casu, vibration_run_time, no_stimulus_run_time, number_repetitions)
+        run_vibration_model (message [1], a_casu, vibration_run_time, no_stimuli_run_time, number_repetitions)
     a_casu.speaker_standby ()
     # a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
     # time.sleep (2.0 / frame_per_second)
