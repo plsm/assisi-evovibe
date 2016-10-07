@@ -3,6 +3,7 @@ import worker
 
 import assisipy.deploy
 import assisipy.assisirun
+import assisipy.collect_data
 
 import yaml
 import zmq
@@ -24,12 +25,12 @@ class WorkerSettings:
         self.socket = None
         self.in_use = False
 
-    def __key_ (self):
+    def key (self):
         return 'casu-%03d' % (self.casu_number)
 
     def to_dep (self):
         return (
-            self.__key_ () ,
+            self.key () ,
             {
                 'controller' : os.path.dirname (os.path.abspath (__file__)) + '/worker.py'
               , 'extra'      : [
@@ -45,7 +46,7 @@ class WorkerSettings:
 
     def to_arena (self):
         return (
-            self.__key_ () ,
+            self.key () ,
             {
                 'pub_addr' : self.pub_addr
               , 'sub_addr' : self.sub_addr
@@ -124,6 +125,14 @@ def deploy_workers (filename, run_number):
     ar = assisipy.assisirun.AssisiRun ('tmp/workers.assisi')
     ar.run ()
     print ("Workers have finished")
+
+def collect_data_from_workers (worker_settings, destination):
+    dc = assisipy.collect_data.DataCollector ('tmp/workers.assisi', logpath = destination)
+    dc.collect ()
+    for ws in worker_settings:
+        os.rename (os.path.join (destination, os.path.join ('data_workers/arena', ws.key ())), os.path.join (destination, ws.key ()))
+    os.rmdir (os.path.join (destination, 'data_workers/arena'))
+    os.rmdir (os.path.join (destination, 'data_workers'))
 
 if __name__ == '__main__':
     lws = load_worker_settings ('workers')

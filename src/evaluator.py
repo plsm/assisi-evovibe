@@ -163,6 +163,13 @@ class Evaluator:
         mean = sum (values) / self.config.number_evaluations_per_chromosome
         weight = 1.0 * (self.image_processing_function.range_length - (best - worst)) / self.image_processing_function.range_length
         return mean * weight
+
+    def evr_standard_deviation_weighted_average (self, values):
+        best = max (values)
+        worst = min (values)
+        mean = sum (values) / self.config.number_evaluations_per_chromosome
+        weight = 1.0 * (self.image_processing_function.range_length - (best - worst)) / self.image_processing_function.range_length
+        return mean * weight
         
     def iteration_step (self, candidate, index_evaluation):
         """

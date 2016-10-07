@@ -9,9 +9,6 @@ import chromosome
 import worker
 import continue_inspyred
 
-import assisipy.deploy
-import assisipy.assisirun
-
 import inspyred
 
 import argparse
@@ -167,21 +164,26 @@ def fitness_to_continue (config, experiment_folder):
     with open (experiment_folder + "partial.csv", "r") as fp:
         f = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
         f.next () #skip header_row
+        rows_partial = [row for row in f]
+        fp.close ()
+    with open (experiment_folder + "fitness.csv", "r") as fp:
+        f = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+        f.next () #skip header_row
         rows_fitness = [row for row in f]
         fp.close ()
-    if rows_fitness == []:
+    if rows_partial == []:
         last_generation_number = 0
         last_episode_number = 0
         parents_fitness   = []
         offspring_fitness = []
     else:
-        last_generation_number = int (rows_fitness [-1][evaluator.PRT_GENERATION])
-        last_episode_number = int (rows_fitness [-1][evaluator.PRT_EPISODE])
+        last_generation_number = int (rows_partial [-1][evaluator.PRT_GENERATION])
+        last_episode_number = int (rows_partial [-1][evaluator.PRT_EPISODE])
         if last_generation_number > 0:
-            parents_fitness   = [r[evaluator.PRT_FITNESS] for r in rows_fitness if r[evaluator.PRT_GENERATION] == last_generation_number - 1]
-            offspring_fitness = [r[evaluator.PRT_FITNESS] for r in rows_fitness if r[evaluator.PRT_GENERATION] == last_generation_number]
+            parents_fitness   = [r[FIT_FITNESS] for r in rows_fitness if r[FIT_GENERATION] == last_generation_number - 1]
+            offspring_fitness = [r[evaluator.PRT_FITNESS] for r in rows_partial if r[evaluator.PRT_GENERATION] == last_generation_number]
         else:
-            parents_fitness   = [r[evaluator.PRT_FITNESS] for r in rows_fitness if r[evaluator.PRT_GENERATION] == last_generation_number]
+            parents_fitness   = [r[FIT_FITNESS] for r in rows_fitness if r[FIT_GENERATION] == last_generation_number]
             offspring_fitness = []
     return (parents_fitness, offspring_fitness, last_generation_number, last_episode_number)
 
@@ -235,8 +237,9 @@ def new_run (config, worker_stubs, experiment_folder):
         config_experiment_folder = experiment_folder
     )
     epsd.finish (True)
-    for ws in worker_stubs.values ():
-        ws.terminate_session ()
+    terminate_workers_get_data (worker_stubs, experiment_folder)
+    # for ws in worker_stubs.values ():
+    #     ws.terminate_session ()
     print ("Evolutionary Strategy algorithm finished!")
 
 def continue_run (config, worker_stubs, experiment_folder):
@@ -262,8 +265,9 @@ def continue_run (config, worker_stubs, experiment_folder):
         config_experiment_folder = experiment_folder
         )
     epsd.finish (True)
-    for ws in worker_stubs.values ():
-        ws.terminate_session ()
+    terminate_workers_get_data (worker_stubs, experiment_folder)
+    # for ws in worker_stubs.values ():
+    #     ws.terminate_session ()
     print ("Evolutionary Strategy algorithm finished!")
 
 def report_previous_run_data (population_parents, population_offsprings, last_generation_number, parents_fitness, offspring_fitness, last_episode_number):
@@ -288,6 +292,11 @@ def report_previous_run_data (population_parents, population_offsprings, last_ge
     print "  last episode", last_episode_number
     raw_input ("Press ENTER to continue")
 
+def terminate_workers_get_data (worker_stubs, experiment_folder):
+    for ws in worker_stubs.values ():
+        ws.terminate_session ()
+    worker_settings.collect_data_from_workers (worker_stubs.values (), experiment_folder + "logs")
+    
 # def run_inspyred (config, worker_stubs, experiment_folder, current_generation = 1, episode_index = 1, seeds = None, eva_values = None):
 #     """
 #     Run the Evolutionary Strategy for the given configuration.
