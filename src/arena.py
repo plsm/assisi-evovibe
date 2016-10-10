@@ -114,9 +114,13 @@ class AbstractArena:
         if config.sound_hardware == 'Graz':
             time.sleep (2.0 / config.frame_per_second)
             config.run_vibration_model (chromosome, self.selected_worker_index, config.evaluation_run_time)
+        time_start_vibration_pattern = None
         for (number, socket, _) in self.workers:
             answer = zmq_sock_utils.recv (socket)
+            if len (answer) == 2:
+                time_start_vibration_pattern = answer [1]
             print ("Worker responsible for casu #%d responded with: %s" % (number, str (answer)))
+        return time_start_vibration_pattern
 
     def __compare_image_thomas (self, mask, image1, image2):
         """

@@ -77,7 +77,27 @@ class AbstractChromosome:
         print the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
         time.sleep (vibration_run_time)
         the_casu.speaker_standby ()
-    pass
+
+    @staticmethod
+    def run_vibration_model_Graz_SinglePulse (chromosome, index, vibration_run_time, no_stimuli_run_time, number_repetitions, pulse):
+        import pyaudio # beagle bones do not need this
+        data = ''
+        for i in xrange((int(float(vibration_run_time) / ((pulse.vibration_period + pulse.pause_period) / 1000.0)))):
+            for x in xrange(int(BITRATE * pulse.vibration_period)):
+                data = data+chr(int(math.sin(x/(((1000 * BITRATE)/(pulse.frequency))/(math.pi*2)))*127+ 128))
+            for x in xrange(int(BITRATE * pulse.pause_period)):
+                data = data+chr(128)
+        stream = pyaudio.PyAudio().open(format = pyaudio.PyAudio().get_format_from_width(1),
+                                        channels = 1,
+                                        rate = 1000 * BITRATE,
+                                        output = True)
+        for _ xrange (number_repetitions):
+            stream.write (data)
+            time.sleep (no_stimuli_run_time)
+        stream.write(data)
+        stream.stop_stream()
+        stream.close()
+        pyaudio.PyAudio().terminate()
 
 
 class SinglePulseGenePause (AbstractChromosome):
@@ -100,7 +120,7 @@ class SinglePulseGenePause (AbstractChromosome):
             vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY]
         else:
             vibe_periods = [SinglePulseGenePause.VIBRATION_PERIOD,    pause_period]
-            vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY,            1]
+            vibe_freqs   = [SinglePulseGenePause.VIBRATION_FREQUENCY,            0]
             vibe_amps    = [SinglePulseGenePause.VIBRATION_INTENSITY,            0]
         the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
         time.sleep (evaluation_run_time)
@@ -171,13 +191,6 @@ class SinglePulseGeneFrequency (AbstractChromosome):
                 pause_period     = SinglePulseGeneFrequency.PAUSE_PERIOD,
                 vibration_period = SinglePulseGeneFrequency.VIBRATION_PERIOD,
                 amplitude        = SinglePulseGeneFrequency.VIBRATION_INTENSITY))
-        # vibration_frequency = chromosome [0]
-        # vibe_periods = [SinglePulseGeneFrequency.VIBRATION_PERIOD,    SinglePulseGeneFrequency.PAUSE_PERIOD]
-        # vibe_freqs   = [vibration_frequency,                          1]
-        # vibe_amps    = [SinglePulseGeneFrequency.VIBRATION_INTENSITY, 0]
-        # the_casu.set_vibration_pattern (vibe_periods, vibe_freqs, vibe_amps)
-        # time.sleep (evaluation_run_time)
-        # the_casu.speaker_standby ()
 
     @staticmethod
     def run_vibration_model_v2 (chromosome, index, evaluation_run_time):
@@ -377,6 +390,65 @@ class SinglePulse1sGenesFrequencyPause (AbstractChromosome):
     def max_period ():
         return max (MIN_PERIOD, min (SinglePulse1sGenesFrequencyPause.PULSE_PERIOD - MIN_PERIOD, MAX_PERIOD))
 
+class SinglePulse1sGenesPulse (AbstractChromosome):
+    """
+    This chromosome contains the gene that control a vibration pulse with 1
+    second of duration.  The genes are the frequency, pause period and
+    amplitude.
+    """
+    PULSE_PERIOD = 1000
+
+    @staticmethod
+    def run_vibration_model (chromosome, the_casu, vibration_run_time, no_stimuli_run_time, number_repetitions):
+        """
+        Run the vibration model represented by the given SinglePulseGenesPulse chromosome.
+        """
+        AbstractChromosome.run_vibration_model_Zagreb_SinglePulse (
+            the_casu, vibration_run_time, no_stimuli_run_time, number_repetitions,
+            Pulse (
+                frequency        = chromosome [0],
+                pause_period     = chromosome [1],
+                vibration_period = SinglePulse1sGenesPulse.PULSE_PERIOD - chromosome [1],
+                amplitude        = chromosome [2]))
+
+    @staticmethod
+    def run_vibration_model_v2 (chromosome, index, evaluation_run_time):
+        pass
+
+    @staticmethod
+    def random_generator (random, args = None):
+        """
+        Return a random instance of a simple SinglePulseGenesPulse chromosome.
+        This method is used as a generator by the evolutionary algorithm.
+        """
+        frequency    = random.randrange (MIN_FREQUENCY , MAX_FREQUENCY + 1                         , STEP_FREQUENCY)
+        pause_period = random.randrange (MIN_PERIOD    , SinglePulse1sGenesPulse.max_period () + 1 , STEP_PERIOD)
+        amplitude    = random.randrange (MIN_INTENSITY , MAX_INTENSITY                             , STEP_INTENSITY)
+        return [frequency, pause_period, amplitude]
+
+    @staticmethod
+    def get_variator ():
+        import inspyred
+        @inspyred.ec.variators.mutator
+        def variator (random, candidate, args = None):
+            result = copy.copy (candidate)
+            gene_index = random.randrange (3)
+            if gene_index == 0:
+                new_gene = gaussian_perturbation (random, candidate [0], MIN_FREQUENCY, MAX_FREQUENCY, STEP_FREQUENCY, STDDEV_FREQUENCY)
+                result [0] = new_gene
+            elif gene_index == 1:
+                new_gene = gaussian_perturbation (random, candidate [1], MIN_PERIOD, SinglePulse1sGenesPulse.max_period (), STEP_PERIOD, STDDEV_PERIOD)
+                result [1] = new_gene
+            elif gene_index = 2:
+                new_gene = gaussian_perturbation (random, candidate [2], MIN_INTENSITY, MAX_INTENSITY, STEP_INTENSITY)
+                result [2] = new_gene
+            return result
+        return variator
+
+    @staticmethod
+    def max_period ():
+        return max (MIN_PERIOD, min (SinglePulse1sGenesPulse.PULSE_PERIOD - MIN_PERIOD, MAX_PERIOD))
+
 class Method:
     def __init__ (self, class_name):
         self.run_vibration_model = {
@@ -392,7 +464,8 @@ CHROMOSOME_METHODS = {
     'SinglePulseGenePause'             : Method (SinglePulseGenePause)     ,
     'SinglePulseGeneFrequency'         : Method (SinglePulseGeneFrequency) ,
     'SinglePulseGenesPulse'            : Method (SinglePulseGenesPulse)    ,
-    'SinglePulse1sGenesFrequencyPause' : Method (SinglePulse1sGenesFrequencyPause)
+    'SinglePulse1sGenesFrequencyPause' : Method (SinglePulse1sGenesFrequencyPause) ,
+    'SinglePulse1sGenesPulse'          : Method (SinglePulse1sGenesPulse)
     }
 
 class Pulse:

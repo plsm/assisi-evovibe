@@ -73,33 +73,25 @@ def cmd_initialise ():
 
 def cmd_active_casu ():
     print ("W%dC Active CASU..." % casu_number)
-    # a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
-    # time.sleep (2.0 / frame_per_second)
-    # a_casu.diagnostic_led_standby ()
     blip_casu ()
+    time_start_vibration_pattern = time.time ()
     if run_vibration_model is None:
         time.sleep (evaluation_run_time) # sound hardware by Graz
     else:
         run_vibration_model (message [1], a_casu, vibration_run_time, no_stimuli_run_time, number_repetitions)
     a_casu.speaker_standby ()
-    # a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
-    # time.sleep (2.0 / frame_per_second)
-    # a_casu.diagnostic_led_standby ()
     blip_casu ()
     print ("W%dC Spreading..." % (casu_number))
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
     print ("W%dC Done!" % (casu_number))
-    zmq_sock_utils.send (socket, [WORKER_OK])
+    zmq_sock_utils.send (socket, [WORKER_OK, time_start_vibration_pattern])
 
 def cmd_passive_casu ():
     print ("W%dC Passive CASU..." % casu_number)
     time.sleep (2.0 / frame_per_second)
     time.sleep (evaluation_run_time)
-    # a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
-    # time.sleep (2.0 / frame_per_second)
-    # a_casu.diagnostic_led_standby ()
     blip_casu ()
     print ("W%dC Spreading..." % (casu_number))
     a_casu.set_airflow_intensity (1)

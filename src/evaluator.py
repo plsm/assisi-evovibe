@@ -4,7 +4,9 @@
 import time
 import subprocess #spawn new processes
 import csv
+import numpy
 import sys
+
 import assisipy
 
 # Column indexes in file population.csv
@@ -18,8 +20,9 @@ EVA_EPISODE          = 1
 EVA_ITERATION        = 2
 EVA_SELECTED_ARENA   = 3
 EVA_ACTIVE_CASU      = 4
-EVA_VALUE            = 5
-EVA_CHROMOSOME_GENES = 6
+EVA_TIMESTAMP        = 5
+EVA_VALUE            = 6
+EVA_CHROMOSOME_GENES = 7
 
 # Column indexes in file partial.csv
 PRT_GENERATION       = 0
@@ -48,14 +51,21 @@ class Evaluator:
         self.generation_number = generation_number
         self.number_analysed_frames = (int) (self.config._evaluation_run_time * self.config.frame_per_second)
         # initialise the evaluation values reduce function
-        if self.config.evaluation_values_reduce == 'average':
-            self._evaluation_values_reduce = self.evr_average
-        elif self.config.evaluation_values_reduce == 'average_without_best_worst':
-            self._evaluation_values_reduce = evr_average_without_best_worst
-        elif self.config.evaluation_values_reduce == 'weighted_average':
-            self._evaluation_values_reduce = self.evr_weighted_average
-        else:
-            raise Exception ("Invalid evaluation values reduce function: " + str (self.config.evaluation_values_reduce))
+        EVALUATION_VALUES_REDUCE_FUNCTION = {
+            'average'                             : self.evr_average ,
+            'average_without_best_worst'          : self.evr_average_without_best_worst ,
+            'weighted_average'                    : self.evr_range_value_weighted_average ,
+            'range_value_weighted_average'        : self.evr_range_value_weighted_average ,
+            'standard_deviation_weighted_average' : self.evr_standard_deviation_weighted_average }
+        self._evaluation_values_reduce = EVALUATION_VALUES_REDUCE_FUNCTION [self.config.evaluation_values_reduce]
+        # if self.config.evaluation_values_reduce == 'average':
+        #     self._evaluation_values_reduce = self.evr_average
+        # elif self.config.evaluation_values_reduce == 'average_without_best_worst':
+        #     self._evaluation_values_reduce = self.evr_average_without_best_worst
+        # elif self.config.evaluation_values_reduce == 'weighted_average':
+        #     self._evaluation_values_reduce = self.evr_weighted_average
+        # else:
+        #     raise Exception ("Invalid evaluation values reduce function: " + str (self.config.evaluation_values_reduce))
         # initialise the evaluation image processing function
         number_analysed_frames_vibration = self.config.vibration_run_time * (self.config.number_repetitions + 1)
         IMAGE_PROCESSING_FUNCTIONS = {
@@ -157,7 +167,7 @@ class Evaluator:
         Reduce evaluation values by taking the best and worst and then computing the average"""
         return (sum (values) - max (values) - min (values)) / (self.config.number_evaluations_per_chromosome - 2)
 
-    def evr_weighted_average (self, values):
+    def evr_range_value_weighted_average (self, values):
         best = max (values)
         worst = min (values)
         mean = sum (values) / self.config.number_evaluations_per_chromosome
@@ -165,10 +175,8 @@ class Evaluator:
         return mean * weight
 
     def evr_standard_deviation_weighted_average (self, values):
-        best = max (values)
-        worst = min (values)
         mean = sum (values) / self.config.number_evaluations_per_chromosome
-        weight = 1.0 * (self.image_processing_function.range_length - (best - worst)) / self.image_processing_function.range_length
+        weight = 1.0 * (self.image_processing_function.range_length - 2 * numpy.std (values)) / self.image_processing_function.range_length
         return mean * weight
         
     def iteration_step (self, candidate, index_evaluation):
@@ -180,14 +188,14 @@ class Evaluator:
         picked_arena = self.episode.select_arena ()
         (recording_process, filename_real) = self.start_iteration_video ()
         print "     Starting vibration model: " + str (candidate) + "..."
-        picked_arena.run_vibration_model (self.config, candidate)
+        time_start_vibration_pattern = picked_arena.run_vibration_model (self.config, candidate)
         print "     Vibration model finished!"
         recording_process.wait ()
         print "     Iteration video finished!"
         self.split_iteration_video (filename_real)
         self.compare_images (picked_arena)
         evaluation_score = self.compute_evaluation (picked_arena)
-        self.write_evaluation (picked_arena, candidate, evaluation_score)
+        self.write_evaluation (picked_arena, candidate, evaluation_score, time_start_vibration_pattern)
         print ("    Evaluation of " + str (candidate) + " is " + str (evaluation_score))
         #raw_input ("\nPress ENTER to continue DEBUG.\n")
         return evaluation_score
@@ -381,7 +389,7 @@ class Evaluator:
             fp.close ()
         return result
 
-    def write_evaluation (self, picked_arena, candidate, evaluation_score):
+    def write_evaluation (self, picked_arena, candidate, evaluation_score, time_start_vibration_pattern):
         """
         Save the result of a chromosome evaluation.
         """
@@ -393,6 +401,7 @@ class Evaluator:
                 self.episode.current_evaluation_in_episode,
                 picked_arena.index,
                 picked_arena.workers [picked_arena.selected_worker_index][0],  # active casu number
+                time_start_vibration_pattern,
                 evaluation_score] + candidate)
             fp.close ()
 
