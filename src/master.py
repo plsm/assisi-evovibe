@@ -94,7 +94,7 @@ def create_experimental_run_files (experiment_folder):
         fp.close ()
     with open (experiment_folder + "evaluation.csv", 'w') as fp:
         f = csv.writer (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-        row = ["generation", "episode", "iteration", "selected_arena", "active_casu", "value", "chromosome_genes"]
+        row = ["generation", "episode", "iteration", "selected_arena", "active_casu", "timestamp", "value", "chromosome_genes"]
         f.writerow (row)
         fp.close ()
     with open (experiment_folder + "fitness.csv", 'w') as fp:
@@ -183,7 +183,8 @@ def fitness_to_continue (config, experiment_folder):
             parents_fitness   = [r[FIT_FITNESS] for r in rows_fitness if r[FIT_GENERATION] == last_generation_number - 1]
             offspring_fitness = [r[evaluator.PRT_FITNESS] for r in rows_partial if r[evaluator.PRT_GENERATION] == last_generation_number]
         else:
-            parents_fitness   = [r[FIT_FITNESS] for r in rows_fitness if r[FIT_GENERATION] == last_generation_number]
+#            parents_fitness   = [r[FIT_FITNESS] for r in rows_fitness if r[FIT_GENERATION] == last_generation_number]
+            parents_fitness   = [r[evaluator.PRT_FITNESS] for r in rows_partial if r[evaluator.PRT_GENERATION] == last_generation_number]
             offspring_fitness = []
     return (parents_fitness, offspring_fitness, last_generation_number, last_episode_number)
 

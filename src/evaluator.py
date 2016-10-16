@@ -51,13 +51,13 @@ class Evaluator:
         self.generation_number = generation_number
         self.number_analysed_frames = (int) (self.config._evaluation_run_time * self.config.frame_per_second)
         # initialise the evaluation values reduce function
-        EVALUATION_VALUES_REDUCE_FUNCTION = {
+        self.EVALUATION_VALUES_REDUCE_FUNCTION = {
             'average'                             : self.evr_average ,
             'average_without_best_worst'          : self.evr_average_without_best_worst ,
             'weighted_average'                    : self.evr_range_value_weighted_average ,
             'range_value_weighted_average'        : self.evr_range_value_weighted_average ,
             'standard_deviation_weighted_average' : self.evr_standard_deviation_weighted_average }
-        self._evaluation_values_reduce = EVALUATION_VALUES_REDUCE_FUNCTION [self.config.evaluation_values_reduce]
+        self._evaluation_values_reduce = self.EVALUATION_VALUES_REDUCE_FUNCTION [self.config.evaluation_values_reduce]
         # if self.config.evaluation_values_reduce == 'average':
         #     self._evaluation_values_reduce = self.evr_average
         # elif self.config.evaluation_values_reduce == 'average_without_best_worst':

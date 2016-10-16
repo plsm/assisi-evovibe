@@ -37,7 +37,7 @@ class Config (best_config.Config):
     def __init__ (self, filename = 'config'):
         best_config.Config.__init__ (self, [
             Parameter ('number_bees',                    'Number of bees', parse_data = int),
-            Parameter ('bee_area_pixels',                'Number of pixels occupied by a bee', parse_data = int),
+            Parameter ('bee_area_pixels',                'Number of pixels occupied by a bee', parse_data = int, default_value = 850),
             Parameter ('number_generations',             'Number of generations of the evolutionary algorithm', parse_data = int),
             Parameter ('number_evaluations_per_episode', 'How many evaluations to perform with a set of bees', parse_data = int),
             Parameter ('bee_relax_time',                 'How many seconds to wait before testing the first vibration pattern in a set of bees', parse_data = int, default_value = 0),
@@ -71,11 +71,13 @@ Which fitness function to use''',
                 'arena_type',
                 '''1 - stadium arena
 2 - circular arena
+3 - two rectangular boxes arena
 Which arena to use''',
                 parse_data = lambda x : best_config.list_element (
                     [
                         'StadiumBorderArena' ,
-                        'CircularArena'
+                        'CircularArena',
+                        'TwoBoxesArena'
                     ],
                     x)),
             Parameter ('frame_per_second', 'Frames per second', parse_data = int),
@@ -125,11 +127,10 @@ Which method to use when computing the chromosome fitness from a set of evaluati
                 default_value = 'average'
             ),
             Parameter ('vibration_period',  'vibration period used in chromosome with single gene that represents vibration frequency', path_in_dictionary = ['chromosome', 'single_pulse_gene_frequency'], parse_data = int, default_value = -1),
-                       
+            Parameter ('image_width',  'Image width in pixels',  parse_data = int, default_value = 600),
+            Parameter ('image_height', 'Image height in pixels', parse_data = int, default_value = 600),
             Parameter ('elitism', 'Use elitism in evolutionary algorithm', parse_data = best_config.str2bool, default_value = False)
             ])
-        self.image_width = 600
-        self.image_height = 600
         if os.path.isfile (filename):
             self.load_from_yaml_file (filename)
         else:

@@ -91,7 +91,7 @@ class AbstractChromosome:
                                         channels = 1,
                                         rate = 1000 * BITRATE,
                                         output = True)
-        for _ xrange (number_repetitions):
+        for _ in xrange (number_repetitions):
             stream.write (data)
             time.sleep (no_stimuli_run_time)
         stream.write(data)
@@ -168,6 +168,10 @@ class SinglePulseGenePause (AbstractChromosome):
             return result
         return variator
 
+    @staticmethod
+    def get_genes ():
+        return [Gene (name = 'pause period',     unit = 'ms', min_value = MIN_PERIOD,    max_value = MAX_PERIOD,    step = STEP_PERIOD,    stddev = STDDEV_PERIOD)]
+
 
 class SinglePulseGeneFrequency (AbstractChromosome):
     """
@@ -233,6 +237,10 @@ class SinglePulseGeneFrequency (AbstractChromosome):
             result [0] = new_gene
             return result
         return variator
+
+    @staticmethod
+    def get_genes ():
+        return [Gene (name = 'frequency', unit = 'Hz', min_value = MIN_FREQUENCY, max_value = MAX_FREQUENCY, step = STEP_FREQUENCY, stddev = STDDEV_FREQUENCY)]
 
 
 class SinglePulseGenesPulse (AbstractChromosome):
@@ -318,6 +326,13 @@ class SinglePulseGenesPulse (AbstractChromosome):
             return result
         return variator
 
+    @staticmethod
+    def get_genes ():
+        return [Gene (name = 'frequency',        unit = 'Hz', min_value = MIN_FREQUENCY, max_value = MAX_FREQUENCY, step = STEP_FREQUENCY, stddev = STDDEV_FREQUENCY),
+                Gene (name = 'vibration period', unit = 'ms', min_value = MIN_PERIOD,    max_value = MAX_PERIOD,    step = STEP_PERIOD,    stddev = STDDEV_PERIOD),
+                Gene (name = 'pause period',     unit = 'ms', min_value = MIN_PERIOD,    max_value = MAX_PERIOD,    step = STEP_PERIOD,    stddev = STDDEV_PERIOD),
+                Gene (name = 'amplitude',        unit = '%',  min_value = MIN_INTENSITY, max_value = MAX_INTENSITY, step = STEP_INTENSITY, stddev = STDDEV_INTENSITY)]
+
 class SinglePulse1sGenesFrequencyPause (AbstractChromosome):
     """
     This chromosome contains two genes that represent the pulse frequency, and pause time.  The pulse period is always 1s.
@@ -387,6 +402,11 @@ class SinglePulse1sGenesFrequencyPause (AbstractChromosome):
         return variator
 
     @staticmethod
+    def get_genes ():
+        return [Gene (name = 'frequency',    unit = 'Hz', min_value = MIN_FREQUENCY, max_value = MAX_FREQUENCY, step = STEP_FREQUENCY, stddev = STDDEV_FREQUENCY),
+                Gene (name = 'pause period', unit = 'ms', min_value = MIN_PERIOD,    max_value = SinglePulse1sGenesPulse.max_period (), step = STEP_PERIOD, stddev = STDDEV_PERIOD)]
+
+    @staticmethod
     def max_period ():
         return max (MIN_PERIOD, min (SinglePulse1sGenesFrequencyPause.PULSE_PERIOD - MIN_PERIOD, MAX_PERIOD))
 
@@ -439,11 +459,17 @@ class SinglePulse1sGenesPulse (AbstractChromosome):
             elif gene_index == 1:
                 new_gene = gaussian_perturbation (random, candidate [1], MIN_PERIOD, SinglePulse1sGenesPulse.max_period (), STEP_PERIOD, STDDEV_PERIOD)
                 result [1] = new_gene
-            elif gene_index = 2:
-                new_gene = gaussian_perturbation (random, candidate [2], MIN_INTENSITY, MAX_INTENSITY, STEP_INTENSITY)
+            elif gene_index == 2:
+                new_gene = gaussian_perturbation (random, candidate [2], MIN_INTENSITY, MAX_INTENSITY, STEP_INTENSITY, STDDEV_INTENSITY)
                 result [2] = new_gene
             return result
         return variator
+
+    @staticmethod
+    def get_genes ():
+        return [Gene (name = 'frequency',    unit = 'Hz', min_value = MIN_FREQUENCY, max_value = MAX_FREQUENCY, step = STEP_FREQUENCY, stddev = STDDEV_FREQUENCY),
+                Gene (name = 'pause period', unit = 'ms', min_value = MIN_PERIOD,    max_value = SinglePulse1sGenesPulse.max_period (), step = STEP_PERIOD, stddev = STDDEV_PERIOD),
+                Gene (name = 'amplitude',    unit = '%',  min_value = MIN_INTENSITY, max_value = MAX_INTENSITY, step = STEP_INTENSITY, stddev = STDDEV_INTENSITY)]
 
     @staticmethod
     def max_period ():
@@ -456,6 +482,7 @@ class Method:
             'Graz'   : class_name.run_vibration_model_v2 }
         self.variator = class_name.get_variator
         self.generator = class_name.random_generator
+        self.get_genes = class_name.get_genes
 
     def __str__ (self):
         return 'run: ' + str (self.run_vibration_model) + ' variator: ' + str (self.variator) + ' generator: ' + str (self.generator)
@@ -478,6 +505,18 @@ class Pulse:
     def __str__ (self):
         return '%dHz %d%% %dms %dms' % (self.frequency, self.amplitude, self.vibration_period, self.pause_period)
     
+
+class Gene:
+    '''
+    Describes a gene in a chromosome.
+    '''
+    def __init__ (self, name, unit, min_value, max_value, step, stddev):
+        self.name = name
+        self.unit = unit
+        self.min_value = min_value
+        self.max_value = max_value
+        self.step = step
+        self.stddev = stddev
 
 if __name__ == '__main__':
     pass

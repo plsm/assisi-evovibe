@@ -13,6 +13,8 @@ import random
 import time
 import Image
 
+MAXIMUM_TEMPERATURE_DIFFERENCE = 1
+
 def find_app (app):
     command = "which " + app
     process = subprocess.Popen (command, stdout = subprocess.PIPE, shell = True)
@@ -91,7 +93,7 @@ class AbstractArena:
         if good:
             for i1 in xrange (len (self.workers) - 1):
                 for i2 in xrange (1, len (self.workers)):
-                    if math.abs (temps [i1] - temps [i2]) > MAXIMUM_TEMPERATURE_DIFFERENCE:
+                    if abs (temps [i1] - temps [i2]) > MAXIMUM_TEMPERATURE_DIFFERENCE:
                         good = False
         if not good:
             value = 0
@@ -104,7 +106,8 @@ class AbstractArena:
         This worker will be the active CASU, while the others are the passive CASU.
         Waits for the response from all workers.  Workers respond when they finish their role.
         """
-        self.selected_worker_index = random.randrange (len (self.workers))
+        #self.selected_worker_index = random.randrange (len (self.workers))
+        self.selected_worker_index = 0
         for i in xrange (len (self.workers)):
             (_, socket, _) = self.workers [i]
             if i == self.selected_worker_index:
@@ -357,6 +360,77 @@ arena_radius : %d
 """ % (self.arena_center_x,
        self.arena_center_y,
        self.arena_radius))
+        fp.close ()
+
+
+class TwoBoxesArena (AbstractArena):
+    """
+    An arena that contains two rectangular boxes that may not be adjacent.  Each box has a single CASUs.  Regions of interest are the boxes around the CASUs.
+    """
+    LABELS = ["first", "second"]
+    def __init__ (self, worker_settings, episode_path, img_path, index, config):
+        """
+        Ask the user the position of the arena, of the casu, and of the region of interest.
+        """
+        AbstractArena.__init__ (self, worker_settings, ["first", "second"], episode_path, img_path, index, config)
+        self.roi_top = [-1, -1]
+        self.roi_left = [-1, -1]
+        self.roi_right = [-1, -1]
+        self.roi_bottom = [-1, -1]
+        for index in xrange (2):
+            ok = False
+            while not ok:
+                try:
+                    self.roi_left [index] = int (raw_input ("Leftmost (min) pixel of the %s box? " % (TwoBoxesArena.LABELS [index])))
+                    self.roi_right [index] = int (raw_input ("Rightmost (max) pixel of the %s box? " % (TwoBoxesArena.LABELS [index])))
+                    if self.roi_left [index] > self.roi_right [index]:
+                        print ("Invalid pixel data!")
+                        continue
+                    self.roi_top [index] = int (raw_input ("Topmost (min) pixel of the %s box? " % (TwoBoxesArena.LABELS [index])))
+                    self.roi_bottom [index] = int (raw_input ("Bottommost (max) pixel of the %s box? " % (TwoBoxesArena.LABELS [index])))
+                    if self.roi_top [index] > self.roi_bottom [index]:
+                        print ("Invalid pixel data!")
+                        continue
+                    ok = True
+                except ValueError:
+                    print ("Not a number!")
+
+    def create_region_of_interests_image (self):
+        subprocess.check_call ([
+            CONVERT_BIN_FILENAME,
+            self.episode_path + 'Background.jpg',
+            '-fill', '#FFFF007F',
+            '-draw', 'rectangle %d,%d %d,%d' % (self.roi_left [0], self.roi_top [0], self.roi_right [0], self.roi_bottom [0]),
+            '-draw', 'rectangle %d,%d %d,%d' % (self.roi_left [1], self.roi_top [1], self.roi_right [1], self.roi_bottom [1]),
+            self.img_path + 'Region-of-Interests.jpg'])
+
+    def create_mask_images_casu_images (self, config):
+        for index in xrange (2):
+            subprocess.check_call ([
+                CONVERT_BIN_FILENAME,
+                '-size', '%dx%d' % (config.image_width, config.image_height),
+                'xc:black',
+                '-fill', '#FFFFFF',
+                '-draw', 'rectangle %d,%d %d,%d' % (self.roi_left [index], self.roi_top [index], self.roi_right [index], self.roi_bottom [index]),
+                self.img_path + 'Mask-%d.jpg' % (index)])
+
+    def image_processing_header (self):
+        return ["background_first", "previous_iteration_first", "background_second", "previous_iteration_second"]
+
+    def write_properties (self):
+        """
+        Save the arena properties for later reference.
+        """
+        fp = open (self.img_path + "properties", 'w')
+        for index, label in zip (xrange (2), TwoBoxesArena.LABELS):
+            fp.write ("""roi_left_%s : %d
+roi_right_%s : %d
+roi_top_%s : %d
+roi_bottom_%s : %d
+""" % (label, self.roi_left [index],
+       label, self.roi_right [index],
+       label, self.roi_top [index],
+       label, self.roi_bottom [index]))
         fp.close ()
 
 

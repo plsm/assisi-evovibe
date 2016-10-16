@@ -153,8 +153,11 @@ class Episode:
                     new_arena = arena.StadiumBorderArena (self.worker_settings, self.current_path, img_path, index, self.config)
                 elif self.config.arena_type == 'CircularArena':
                     new_arena = arena.CircularArena (self.worker_settings, self.current_path, img_path, index, self.config)
+                elif self.config.arena_type == 'TwoBoxesArena':
+                    new_arena = arena.TwoBoxesArena (self.worker_settings, self.current_path, img_path, index, self.config)
                 else:
                     print ("Unknown arena type: %s" % (str (self.config.arena_type)))
+                    raise
                 new_arena.create_region_of_interests_image ()
                 command = "display " + img_path + "Region-of-Interests.jpg"
                 display_process = subprocess.Popen (command, shell = True)
