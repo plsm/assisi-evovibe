@@ -18,16 +18,18 @@
 # Pedro Mariano 2016
 # ASSISIbf
 
-import master
-import evaluator
+import chromosome
 import config
+import evaluator
+import master
 
 import argparse
 import csv
 import matplotlib.pyplot
 import numpy
 
-MAX_EVALUATION_VALUE = 60
+#MAX_EVALUATION_VALUE = 60
+EVALUATION_VALUE_DOMAIN = [-60, 60]
 NUMBER_EVALUATIONS_PER_CHROMOSOME = 3
 FREQUENCY_DOMAIN = [300, 1500]
 
@@ -60,6 +62,17 @@ def colorise (sequence):
             
     #         return 
     return [str ((x - l) / (h - l)) for x in sequence]
+
+def evaluation_column (version, index):
+    if version == 1:
+        if index == evaluator.EVA_TIMESTAMP:
+            raise Exception ('File evaluation.csv version 1 does not have a column with unix timestamp')
+        elif index > evaluator.EVA_TIMESTAMP:
+            return index - 1
+        else:
+            return index
+    else:
+        return index
 
 def summarise_fitness (fitness):
     def row_result ():
@@ -98,41 +111,45 @@ SUMEVA_MIN = 3
 SUMEVA_MAX = 4
 SUMEVA_CHROMOSOME_GENES = 5
 
-def summarise_evaluation (evaluation):
+def summarise_evaluation (evaluation, evaluation_file_version):
     result = []
     data = []
     index = 0
     for row in evaluation:
-        data.append (row [evaluator.EVA_VALUE])
+        data.append (row [evaluation_column (evaluation_file_version, evaluator.EVA_VALUE)])
         index += 1
         if index == NUMBER_EVALUATIONS_PER_CHROMOSOME:
             index = 0
-            genes = row [evaluator.EVA_CHROMOSOME_GENES:]
-            generation = row [evaluator.EVA_GENERATION]
+            genes = row [evaluation_column (evaluation_file_version, evaluator.EVA_CHROMOSOME_GENES):]
+            generation = row [evaluation_column (evaluation_file_version, evaluator.EVA_GENERATION)]
             result.append ([generation, numpy.mean (data), numpy.std (data), min (data), max (data)] + genes)
             data = []
     return result
 
-def plot_value_vs_chromosome_gene (evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None):
+def axislim (function, domain, fraction = 100):
+    if domain is not None:
+        delta = (domain [1] - domain [0]) / fraction
+        function ([domain [0] - delta, domain [1] + delta])
+
+def plot_value_vs_chromosome_gene (evaluation, chromosome_gene_index, chromosome_gene_name, evaluation_file_version, subtitle = '', chromosome_gene_domain = None, chromosome_gene_unit = None):
     matplotlib.pyplot.clf ()
     matplotlib.pyplot.scatter (
-        [r [evaluator.EVA_CHROMOSOME_GENES + chromosome_gene_index] for r in evaluation],
-        [r [evaluator.EVA_VALUE] for r in evaluation],
-        c = [r [evaluator.EVA_GENERATION] for r in evaluation],
+        [r [evaluation_column (evaluation_file_version, evaluator.EVA_CHROMOSOME_GENES + chromosome_gene_index)] for r in evaluation],
+        [r [evaluation_column (evaluation_file_version, evaluator.EVA_VALUE)] for r in evaluation],
+        c = [r [evaluation_column (evaluation_file_version, evaluator.EVA_GENERATION)] for r in evaluation],
         edgecolors = 'face',
         alpha = 0.5
         )
     cb = matplotlib.pyplot.colorbar ()
     cb.set_label ('generation')
-    matplotlib.pyplot.title ('evaluation value versus %s \n%s' % (chromosome_gene_name, subtitle))
-    matplotlib.pyplot.xlabel (chromosome_gene_name)
+    matplotlib.pyplot.title ('evaluation value versus %s\n%s' % (chromosome_gene_name, subtitle))
+    matplotlib.pyplot.xlabel (chromosome_gene_name + ('' if chromosome_gene_unit is None else ' (%s)' % (chromosome_gene_unit)))
     matplotlib.pyplot.ylabel ('value')
-    matplotlib.pyplot.ylim ([0, MAX_EVALUATION_VALUE])
-    if chromosome_gene_domain is not None:
-        matplotlib.pyplot.xlim ([chromosome_gene_domain [0] - 10, chromosome_gene_domain[1] + 10])
+    matplotlib.pyplot.ylim (EVALUATION_VALUE_DOMAIN)
+    axislim (matplotlib.pyplot.xlim, chromosome_gene_domain, 20)
     matplotlib.pyplot.savefig ('value-VS-%s.png' % chromosome_gene_name)
 
-def plot_fitness_vs_chromosome_gene (summarised_evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None):
+def plot_fitness_vs_chromosome_gene (summarised_evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None, chromosome_gene_unit = None):
     matplotlib.pyplot.clf ()
     matplotlib.pyplot.scatter (
         [r [SUMEVA_CHROMOSOME_GENES + chromosome_gene_index] for r in summarised_evaluation],
@@ -145,15 +162,14 @@ def plot_fitness_vs_chromosome_gene (summarised_evaluation, chromosome_gene_inde
     cb = matplotlib.pyplot.colorbar ()
     cb.set_label ('generation')
     matplotlib.pyplot.title ('fitness versus %s\n%s' % (chromosome_gene_name, subtitle))
-    matplotlib.pyplot.xlabel (chromosome_gene_name)
+    matplotlib.pyplot.xlabel (chromosome_gene_name + ('' if chromosome_gene_unit is None else ' (%s)' % (chromosome_gene_unit)))
     matplotlib.pyplot.ylabel ('fitness')
-    matplotlib.pyplot.ylim ([0, MAX_EVALUATION_VALUE])
-    if chromosome_gene_domain is not None:
-        matplotlib.pyplot.xlim ([chromosome_gene_domain [0] - 10, chromosome_gene_domain[1] + 10])
+    matplotlib.pyplot.ylim (EVALUATION_VALUE_DOMAIN)
+    axislim (matplotlib.pyplot.xlim, chromosome_gene_domain, 20)
     matplotlib.pyplot.savefig ('fitness-VS-%s.png' % chromosome_gene_name)
 
 
-def plot_value_range_vs_chromosome_gene (summarised_evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None):
+def plot_value_range_vs_chromosome_gene (summarised_evaluation, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None, chromosome_gene_unit = None):
     # max_generations = max ([r [SUMEVA_GENERATION] for r in summarised_evaluation])
     # colors = [(2.0 * r [SUMEVA_GENERATION] / max_generations if r [SUMEVA_GENERATION] <  max_generations / 2 else 1.0 ,
     #            2.0 * (max_generations - r [SUMEVA_GENERATION]) / max_generations if r [SUMEVA_GENERATION] >= max_generations / 2 else 1.0 ,
@@ -179,11 +195,10 @@ def plot_value_range_vs_chromosome_gene (summarised_evaluation, chromosome_gene_
     cb = matplotlib.pyplot.colorbar ()
     cb.set_label ('generation')
     matplotlib.pyplot.title ('value range versus %s\n%s' % (chromosome_gene_name, subtitle))
-    matplotlib.pyplot.xlabel (chromosome_gene_name)
+    matplotlib.pyplot.xlabel (chromosome_gene_name + ('' if chromosome_gene_unit is None else ' (%s)' % (chromosome_gene_unit)))
     matplotlib.pyplot.ylabel ('value')
-    matplotlib.pyplot.ylim ([0, MAX_EVALUATION_VALUE])
-    if chromosome_gene_domain is not None:
-        matplotlib.pyplot.xlim ([chromosome_gene_domain [0] - 10, chromosome_gene_domain[1] + 10])
+    matplotlib.pyplot.ylim (EVALUATION_VALUE_DOMAIN)
+    axislim (matplotlib.pyplot.xlim, chromosome_gene_domain)
     #matplotlib.pyplot.colorbar (colors)
     matplotlib.pyplot.savefig ('value-range-VS-%s.png' % chromosome_gene_name)
     
@@ -204,9 +219,10 @@ def plot_population_fitness_vs_generation (summarised_fitness, subtitle = ''):
     matplotlib.pyplot.title ('population fitness\n' + subtitle)
     matplotlib.pyplot.xlabel ('generation')
     matplotlib.pyplot.ylabel ('fitness')
+    matplotlib.pyplot.ylim (EVALUATION_VALUE_DOMAIN)
     matplotlib.pyplot.savefig ('population-fitness.png')
 
-def plot_chromosome_gene_vs_generation (summarised_fitness, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None):
+def plot_chromosome_gene_vs_generation (summarised_fitness, chromosome_gene_index, chromosome_gene_name, subtitle = '', chromosome_gene_domain = None, chromosome_gene_unit = None):
     xs = [r [0] for r in summarised_fitness]
     ymean = [r [1 + 2 * chromosome_gene_index] for r in summarised_fitness]
     ystdv = [r [1 + 2 * chromosome_gene_index + 1] for r in summarised_fitness]
@@ -224,10 +240,9 @@ def plot_chromosome_gene_vs_generation (summarised_fitness, chromosome_gene_inde
         )
     matplotlib.pyplot.title ('chromosome gene %s\n%s' % (chromosome_gene_name, subtitle))
     matplotlib.pyplot.xlabel ('generation')
-    matplotlib.pyplot.ylabel (chromosome_gene_name)
-    if chromosome_gene_domain is not None:
-        matplotlib.pyplot.ylim ([chromosome_gene_domain [0] - 10, chromosome_gene_domain[1] + 10])
-    matplotlib.pyplot.savefig ('population-%s.png' % (chromosome_gene_name))
+    matplotlib.pyplot.ylabel (chromosome_gene_name + ('' if chromosome_gene_unit is None else ' (%s)' % (chromosome_gene_unit)))
+    axislim (matplotlib.pyplot.ylim, chromosome_gene_domain)
+    matplotlib.pyplot.savefig ('chromosome-gene-%s-VS-generation.png' % (chromosome_gene_name))
 
 
 def plot_histogram_fitness_noise (summarised_evaluation, subtitle):
@@ -237,19 +252,20 @@ def plot_histogram_fitness_noise (summarised_evaluation, subtitle):
     """
     noise = [s [SUMEVA_MAX] - s [SUMEVA_MIN] for s in summarised_evaluation]
     matplotlib.pyplot.clf ()
-    matplotlib.pyplot.hist (noise, bins = MAX_EVALUATION_VALUE + 1)
-    matplotlib.pyplot.xlim ([0, MAX_EVALUATION_VALUE])
+    max_xlim = EVALUATION_VALUE_DOMAIN [1] - EVALUATION_VALUE_DOMAIN [0]
+    matplotlib.pyplot.hist (noise, bins = (max_xlim + 1))
+    matplotlib.pyplot.xlim ([0, max_xlim])
     matplotlib.pyplot.title ('Histogram of distance between lowest and highest evaluation value\n' + subtitle)
     matplotlib.pyplot.savefig ('histogram-fitness-noise.png')
 
-def plot_evaluation_value_vs_episode_iteration (evaluation, subtitle, config):
+def plot_evaluation_value_vs_episode_iteration (evaluation, evaluation_file_version, subtitle, config):
     """
     Plot the evaluation value versus episode iteration to check how tired bees are or if they are behaving as sitters."""
     matplotlib.pyplot.clf ()
     matplotlib.pyplot.scatter (
-        [r [evaluator.EVA_ITERATION]  for r in evaluation],
-        [r [evaluator.EVA_VALUE]      for r in evaluation],
-        c = [r [evaluator.EVA_GENERATION] for r in evaluation],
+        [r [evaluation_column (evaluation_file_version, evaluator.EVA_ITERATION)]  for r in evaluation],
+        [r [evaluation_column (evaluation_file_version, evaluator.EVA_VALUE)]      for r in evaluation],
+        c = [r [evaluation_column (evaluation_file_version, evaluator.EVA_GENERATION)] for r in evaluation],
         edgecolors = 'face',
         alpha = 0.5
         )
@@ -257,7 +273,7 @@ def plot_evaluation_value_vs_episode_iteration (evaluation, subtitle, config):
     matplotlib.pyplot.xlabel ('iteration')
     matplotlib.pyplot.ylabel ('value')
     matplotlib.pyplot.xlim ([-0.5, config.number_evaluations_per_episode + 0.5])
-    matplotlib.pyplot.ylim ([0, MAX_EVALUATION_VALUE])
+    matplotlib.pyplot.ylim (EVALUATION_VALUE_DOMAIN)
     cb = matplotlib.pyplot.colorbar ()
     cb.set_label ('generation')
     matplotlib.pyplot.savefig ('evaluation-value-VS-episode-iteration.png')
@@ -279,23 +295,69 @@ def parse_arguments ():
         type = str,
         help = 'configuration file name'
     )
+    parser.add_argument (
+        '--evaluation-file-version',
+        default = 2,
+        type = int,
+        help = 'version of the file evaluation.csv'
+        )
+    parser.add_argument (
+        '--max-evaluation-value',
+        default = 60,
+        type = int,
+        help = 'maximum value of a chromosome evaluation'
+        )
+    parser.add_argument (
+        '--min-evaluation-value',
+        default = 0,
+        type = int,
+        help = 'minimum value of a chromosome evaluation'
+        )
     return parser.parse_args ()
 
-subtitle = 'with elitism'
-#subtitle = 'no elitism'
 args = parse_arguments ()
 subtitle = args.subtitle
 cfg = config.Config (args.config)
+evaluation_file_version = args.evaluation_file_version
+EVALUATION_VALUE_DOMAIN = [args.min_evaluation_value, args.max_evaluation_value]
 
 evaluation = read_evaluation_file ()
 fitness = read_fitness_file ()
 sf = summarise_fitness (fitness [1])
-se = summarise_evaluation (evaluation [1])
-#print se
-plot_value_vs_chromosome_gene (evaluation [1], 0, 'frequency', subtitle, FREQUENCY_DOMAIN)
-plot_fitness_vs_chromosome_gene (se, 0, 'frequency', subtitle, FREQUENCY_DOMAIN)
-plot_value_range_vs_chromosome_gene (se, 0, 'frequency', subtitle, FREQUENCY_DOMAIN)
+se = summarise_evaluation (evaluation [1], evaluation_file_version)
+
+for index, gene in enumerate (chromosome.CHROMOSOME_METHODS [cfg.chromosome_type].get_genes ()):
+    domain = [gene.min_value, gene.max_value]
+    plot_value_vs_chromosome_gene (
+        evaluation [1],
+        chromosome_gene_index = index,
+        chromosome_gene_name = gene.name,
+        chromosome_gene_domain = domain,
+        chromosome_gene_unit = gene.unit,
+        evaluation_file_version = evaluation_file_version,
+        subtitle = subtitle)
+    plot_fitness_vs_chromosome_gene (
+        summarised_evaluation = se,
+        chromosome_gene_index = index,
+        chromosome_gene_name = gene.name,
+        chromosome_gene_domain = domain,
+        chromosome_gene_unit = gene.unit,
+        subtitle = subtitle)
+    plot_value_range_vs_chromosome_gene (
+        summarised_evaluation = se,
+        chromosome_gene_index = index,
+        chromosome_gene_name = gene.name,
+        chromosome_gene_domain = domain,
+        chromosome_gene_unit = gene.unit,
+        subtitle = subtitle)
+    plot_chromosome_gene_vs_generation (
+        summarised_fitness = sf,
+        chromosome_gene_index = index,
+        chromosome_gene_name = gene.name,
+        subtitle = subtitle,
+        chromosome_gene_domain = domain,
+        chromosome_gene_unit = gene.unit)
+
 plot_population_fitness_vs_generation (sf, subtitle)
-plot_chromosome_gene_vs_generation (sf, 0, 'frequency', subtitle, FREQUENCY_DOMAIN)
 plot_histogram_fitness_noise (se, subtitle)
-plot_evaluation_value_vs_episode_iteration (evaluation [1], subtitle, cfg)
+plot_evaluation_value_vs_episode_iteration (evaluation [1], evaluation_file_version, subtitle, cfg)

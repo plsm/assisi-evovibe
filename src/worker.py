@@ -34,7 +34,7 @@ run_vibration_model = None
 keep_going = True
 
 def blip_casu ():
-    a_casu.set_diagnostic_led_rgb (0.5, 0, 0)
+    a_casu.set_diagnostic_led_rgb (0.125, 0, 0)
     time.sleep (2.0 / frame_per_second)
     a_casu.diagnostic_led_standby ()
     
@@ -97,6 +97,42 @@ def cmd_passive_casu ():
     a_casu.set_airflow_intensity (1)
     time.sleep (spreading_waiting_time)
     a_casu.airflow_standby ()
+    print ("W%dC Done!" % (casu_number))
+    zmq_sock_utils.send (socket, [WORKER_OK])
+
+def cmd_active_casu_HACK ():
+    print ("W%dC Active CASU hack..." % casu_number)
+    blip_casu ()
+    print ("W%dC   Spreading..." % (casu_number))
+    a_casu.set_airflow_intensity (1)
+    time.sleep (30)
+    a_casu.airflow_standby ()
+    blip_casu ()
+    print ("W%dC   No stimuli..." % (casu_number))
+    time.sleep (10)
+    blip_casu ()
+    print ("W%dC   Vibration..." % (casu_number))
+    time_start_vibration_pattern = time.time ()
+    run_vibration_model (message [1], a_casu, 30, 0, 0)
+    a_casu.speaker_standby ()
+    blip_casu ()
+    print ("W%dC Done!" % (casu_number))
+    zmq_sock_utils.send (socket, [WORKER_OK, time_start_vibration_pattern])
+
+def cmd_passive_casu_HACK ():
+    print ("W%dC Passive CASU hack..." % casu_number)
+    blip_casu ()
+    print ("W%dC   Spreading..." % (casu_number))
+    a_casu.set_airflow_intensity (1)
+    time.sleep (30)
+    a_casu.airflow_standby ()
+    blip_casu ()
+    print ("W%dC   No stimuli..." % (casu_number))
+    time.sleep (10)
+    blip_casu ()
+    print ("W%dC   No Stimuli..." % (casu_number))
+    time.sleep (30)
+    blip_casu ()
     print ("W%dC Done!" % (casu_number))
     zmq_sock_utils.send (socket, [WORKER_OK])
 
@@ -206,9 +242,9 @@ if __name__ == '__main__':
         if command == INITIALISE:
             cmd_initialise ()
         elif command == ACTIVE_CASU:
-            cmd_active_casu ()
+            cmd_active_casu_HACK ()
         elif command == PASSIVE_CASU:
-            cmd_passive_casu ()
+            cmd_passive_casu_HACK ()
         elif command == CASU_STATUS:
             print ("W%dC temperature readins: %s" % (casu_number, str (a_casu.get_temp (casu.ARRAY))))
             zmq_sock_utils.send (socket, a_casu.get_temp (casu.TEMP_WAX))

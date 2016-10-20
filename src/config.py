@@ -129,6 +129,8 @@ Which method to use when computing the chromosome fitness from a set of evaluati
             Parameter ('vibration_period',  'vibration period used in chromosome with single gene that represents vibration frequency', path_in_dictionary = ['chromosome', 'single_pulse_gene_frequency'], parse_data = int, default_value = -1),
             Parameter ('image_width',  'Image width in pixels',  parse_data = int, default_value = 600),
             Parameter ('image_height', 'Image height in pixels', parse_data = int, default_value = 600),
+            Parameter ('evaluation_proceeding', 'Evaluation proceeding', parse_data = best_config.identity, default_value = []),
+            Parameter ('has_blip',   'Turn the LED between evaluation segmetns', parse_data = bool, default_value = True),
             Parameter ('elitism', 'Use elitism in evolutionary algorithm', parse_data = best_config.str2bool, default_value = False)
             ])
         if os.path.isfile (filename):

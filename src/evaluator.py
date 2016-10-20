@@ -50,6 +50,7 @@ class Evaluator:
         self.experiment_folder = experiment_folder
         self.generation_number = generation_number
         self.number_analysed_frames = (int) (self.config._evaluation_run_time * self.config.frame_per_second)
+        self.number_analysed_frames = int ((30 + 10 + 30) * self.config.frame_per_second) + 2 * 4
         # initialise the evaluation values reduce function
         self.EVALUATION_VALUES_REDUCE_FUNCTION = {
             'average'                             : self.evr_average ,
@@ -208,6 +209,7 @@ class Evaluator:
         """
         print "\n\n* ** Starting Iteration Video..."
         num_buffers = (self.config._evaluation_run_time + self.config.spreading_waiting_time) * self.config.frame_per_second
+        num_buffers = (30 + 10 + 30) * self.config.frame_per_second + 2 * 4
         filename_real = self.episode.current_path + 'iterationVideo_' + str (self.episode.current_evaluation_in_episode) + '.avi'
         bashCommand_video = 'gst-launch-0.10' + \
                             ' --gst-plugin-path=/usr/local/lib/gstreamer-0.10/' + \
@@ -231,12 +233,12 @@ class Evaluator:
                            " -loglevel error" + \
                            " -frames:v " + str (self.number_analysed_frames) + \
                            " -f image2 tmp/iteration-image-%4d.jpg"
-        bashCommandSplit = "ffmpeg" + \
-                           " -i " + filename_real + \
-                           " -r " + str (self.config.frame_per_second) + \
-                           " -loglevel error" + \
-                           " -frames " + str (self.number_analysed_frames) + \
-                           " -f image2 tmp/iteration-image-%4d.jpg"
+        # bashCommandSplit = "ffmpeg" + \
+        #                    " -i " + filename_real + \
+        #                    " -r " + str (self.config.frame_per_second) + \
+        #                    " -loglevel error" + \
+        #                    " -frames " + str (self.number_analysed_frames) + \
+        #                    " -f image2 tmp/iteration-image-%4d.jpg"
         p = subprocess.Popen (bashCommandSplit, shell=True, executable='/bin/bash') #to create and save the real images from the video depending on the iteration number
         p.wait ()
         print ("Finished spliting iteration " + str (self.episode.current_evaluation_in_episode) + " video.")
@@ -258,8 +260,10 @@ class Evaluator:
         fp.close ()
         print ("Finished comparing images from iteration " + str (self.episode.current_evaluation_in_episode) + " video.")
 
-
     def compute_evaluation (self, picked_arena):
+        return self.compute_evaluation_HACK (picked_arena)
+
+    def compute_evaluation_NORMAL (self, picked_arena):
         """
         Compute the evaluation of the current chromosome.  This depends on the fitness function property of the configuration file.
         """
@@ -301,6 +305,29 @@ class Evaluator:
         print '    Processed:', message
         return result
 
+    def compute_evaluation_HACK (self, picked_arena):
+        result = 0
+        filename = "%simage-processing_%d.csv" % (self.episode.current_path, self.episode.current_evaluation_in_episode)
+        with open (filename, 'r') as fp:
+            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+            freader.next () # skip header row
+            if self.config.has_blip:
+                freader.next ()
+            for _ in xrange (int (self.config.frame_per_second * 30)):
+                freader.next ()
+            if self.config.has_blip:
+                freader.next ()
+            for _ in xrange (int (self.config.frame_per_second * 10)):
+                row = freader.next ()
+                result -= self.image_processing_function.no_stimuli (self.config, picked_arena, row)
+            if self.config.has_blip:
+                freader.next ()
+            for _ in xrange (int (self.config.frame_per_second * 30)):
+                row = freader.next ()
+                result += self.image_processing_function.no_stimuli (self.config, picked_arena, row)
+            fp.close ()
+        return result
+
     def background_bees_active_minus_passive (self, picked_arena):
         """
         ARe there more bees in the ROI
@@ -321,73 +348,73 @@ class Evaluator:
             fp.close ()
         return result
 
-    def stopped_frames (self, picked_arena):
-        """
-        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
-        """
-        result = 0
-        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
-            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-            freader.next ()
-            freader.next ()
-            for row in freader:
-                if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
-                    result += row [picked_arena.selected_worker_index * 2]
-            fp.close ()
-        return result
+    # def stopped_frames (self, picked_arena):
+    #     """
+    #     In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+    #     """
+    #     result = 0
+    #     with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+    #         freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+    #         freader.next ()
+    #         freader.next ()
+    #         for row in freader:
+    #             if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+    #                 result += row [picked_arena.selected_worker_index * 2]
+    #         fp.close ()
+    #     return result
 
-    def frames_with_no_movement_active_casu_roi (self, picked_arena):
-        """
-        In this function we count how many frames
-        where there is no movement in the active CASU ROI.
-        The result is the number of frames.
-        """
-        result = 0
-        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
-            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-            freader.next () # skip header row
-            freader.next () # skip first frame (LED is on)
-            for row in freader:
-                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
-                    result += 1
-            fp.close ()
-        return result
+    # def frames_with_no_movement_active_casu_roi (self, picked_arena):
+    #     """
+    #     In this function we count how many frames
+    #     where there is no movement in the active CASU ROI.
+    #     The result is the number of frames.
+    #     """
+    #     result = 0
+    #     with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+    #         freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+    #         freader.next () # skip header row
+    #         freader.next () # skip first frame (LED is on)
+    #         for row in freader:
+    #             if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+    #                 result += 1
+    #         fp.close ()
+    #     return result
 
-    def frames_with_no_movement_active_passive_casu_rois (self, picked_arena):
-        """
-        In this function we count how many frames where there is no movement in the active CASU ROI,
-        and we count how many frames where there is no movement in the passive CASU ROI.
-        The result is the sum of the first count minus the sum of the second count.
-        """
-        result = 0
-        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
-            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-            freader.next () # skip header row
-            freader.next () # skip first frame (LED is on)
-            for row in freader:
-                if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
-                    result += 1
-                if  row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
-                    result += -1
-            fp.close ()
-        return result
+    # def frames_with_no_movement_active_passive_casu_rois (self, picked_arena):
+    #     """
+    #     In this function we count how many frames where there is no movement in the active CASU ROI,
+    #     and we count how many frames where there is no movement in the passive CASU ROI.
+    #     The result is the sum of the first count minus the sum of the second count.
+    #     """
+    #     result = 0
+    #     with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+    #         freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+    #         freader.next () # skip header row
+    #         freader.next () # skip first frame (LED is on)
+    #         for row in freader:
+    #             if  row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+    #                 result += 1
+    #             if  row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+    #                 result += -1
+    #         fp.close ()
+    #     return result
 
-    def penalize_passive_casu (self, picked_arena):
-        """
-        In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
-        """
-        result = 0
-        with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
-            freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
-            freader.next () # skip header row
-            freader.next () # skip data from frame with LED on
-            for row in freader:
-                if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
-                    result += row [picked_arena.selected_worker_index * 2]
-                if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.pixel_count_background_threshold and row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
-                    result += -row [(1 - picked_arena.selected_worker_index) * 2]
-            fp.close ()
-        return result
+    # def penalize_passive_casu (self, picked_arena):
+    #     """
+    #     In this function we see if the number of pixels that are different in two consecutive frames is lower than a certain threshold, and if there are many bees in that frame.
+    #     """
+    #     result = 0
+    #     with open (self.episode.current_path + "image-processing_" + str (self.episode.current_evaluation_in_episode) + ".csv", 'r') as fp:
+    #         freader = csv.reader (fp, delimiter = ',', quoting = csv.QUOTE_NONNUMERIC, quotechar = '"')
+    #         freader.next () # skip header row
+    #         freader.next () # skip data from frame with LED on
+    #         for row in freader:
+    #             if row [picked_arena.selected_worker_index * 2] > self.config.pixel_count_background_threshold and row [picked_arena.selected_worker_index * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+    #                 result += row [picked_arena.selected_worker_index * 2]
+    #             if row [(1 - picked_arena.selected_worker_index) * 2] > self.config.pixel_count_background_threshold and row [(1 - picked_arena.selected_worker_index) * 2 + 1] < self.config.pixel_count_previous_frame_threshold:
+    #                 result += -row [(1 - picked_arena.selected_worker_index) * 2]
+    #         fp.close ()
+    #     return result
 
     def write_evaluation (self, picked_arena, candidate, evaluation_score, time_start_vibration_pattern):
         """
