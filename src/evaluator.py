@@ -227,18 +227,18 @@ class Evaluator:
         The images are written in folder tmp relative to 
         """
         print "\n\n* ** Starting Video Split..."
-        bashCommandSplit = "avconv" + \
-                           " -i " + filename_real + \
-                           " -r " + str (self.config.frame_per_second) + \
-                           " -loglevel error" + \
-                           " -frames:v " + str (self.number_analysed_frames) + \
-                           " -f image2 tmp/iteration-image-%4d.jpg"
-        # bashCommandSplit = "ffmpeg" + \
+        # bashCommandSplit = "avconv" + \
         #                    " -i " + filename_real + \
         #                    " -r " + str (self.config.frame_per_second) + \
         #                    " -loglevel error" + \
-        #                    " -frames " + str (self.number_analysed_frames) + \
+        #                    " -frames:v " + str (self.number_analysed_frames) + \
         #                    " -f image2 tmp/iteration-image-%4d.jpg"
+        bashCommandSplit = "ffmpeg" + \
+                           " -i " + filename_real + \
+                           " -r " + str (self.config.frame_per_second) + \
+                           " -loglevel error" + \
+                           " -frames " + str (self.number_analysed_frames) + \
+                           " -f image2 tmp/iteration-image-%4d.jpg"
         p = subprocess.Popen (bashCommandSplit, shell=True, executable='/bin/bash') #to create and save the real images from the video depending on the iteration number
         p.wait ()
         print ("Finished spliting iteration " + str (self.episode.current_evaluation_in_episode) + " video.")
@@ -319,12 +319,12 @@ class Evaluator:
                 freader.next ()
             for _ in xrange (int (self.config.frame_per_second * 10)):
                 row = freader.next ()
-                result -= self.image_processing_function.no_stimuli (self.config, picked_arena, row)
+                result += ipf_penalize_resting_bees (self.config, picked_arena, row)
             if self.config.has_blip:
                 freader.next ()
             for _ in xrange (int (self.config.frame_per_second * 30)):
                 row = freader.next ()
-                result += self.image_processing_function.no_stimuli (self.config, picked_arena, row)
+                result += ipf_penalize_passive_casu (self.config, picked_arena, row)
             fp.close ()
         return result
 
@@ -488,6 +488,15 @@ def ipf_penalize_passive_casu (config, picked_arena, row):
     return \
         + (row [     picked_arena.selected_worker_index  * 2] if row [     picked_arena.selected_worker_index  * 2] > config.pixel_count_background_threshold and row [     picked_arena.selected_worker_index  * 2 + 1] < config.pixel_count_previous_frame_threshold else 0) \
         - (row [(1 - picked_arena.selected_worker_index) * 2] if row [(1 - picked_arena.selected_worker_index) * 2] > config.pixel_count_background_threshold and row [(1 - picked_arena.selected_worker_index) * 2 + 1] < config.pixel_count_previous_frame_threshold else 0)
+
+def ipf_penalize_resting_bees (config, picked_arena, row):
+    column_passive_background = (1 - picked_arena.selected_worker_index) * 2
+    column_passive_previous   = (1 - picked_arena.selected_worker_index) * 2 + 1
+    column_active_background  = picked_arena.selected_worker_index  * 2
+    column_active_previous = picked_arena.selected_worker_index  * 2 + 1
+    return \
+        - row [column_active_background]  if row [column_active_background]  > config.pixel_count_background_threshold and row [column_active_previous]  < config.pixel_count_previous_frame_threshold else 0 \
+        - row [column_passive_background] if row [column_passive_background] > config.pixel_count_background_threshold and row [column_passive_previous] < config.pixel_count_previous_frame_threshold else 0
 
 def ipf_ratio_frames_with_no_movement_vibration_over_no_stimuli_active_casu_roi (config, frames_with_vibration, frames_without_stimuli):
     number_analysed_frames_no_stimuli = config.no_stimuli_run_time * config.number_repetitions
